@@ -16,6 +16,8 @@
     "language": "العربية",
     "signOut": "Sign out",
     "signIn": "Sign in with Google",
+    "adminWelcome": "tito control panel",
+    "adminSecure": "Owner access only — secure sign-in",
     "accessDenied": "Access denied",
     "accessDeniedHint": "This app is for the owner only. You have been signed out.",
     "idleWarning": "Your session will expire in 2 minutes",

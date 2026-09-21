@@ -77,9 +77,12 @@ export function TodayPage() {
   const isToday = cairoDateString(selectedDate) === cairoDateString(new Date());
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t('today.title')}</h1>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-default pb-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold font-latin">Ops</p>
+          <h1 className="mt-1 text-2xl font-bold text-espresso">{t('today.title')}</h1>
+        </div>
         <div className="flex gap-1">
           <Button
             variant={viewMode === 'day' ? 'primary' : 'ghost'}

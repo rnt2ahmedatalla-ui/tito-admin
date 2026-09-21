@@ -16,6 +16,8 @@
     "language": "English",
     "signOut": "تسجيل الخروج",
     "signIn": "تسجيل الدخول بـ Google",
+    "adminWelcome": "لوحة تحكم tito",
+    "adminSecure": "دخول آمن للمالك فقط",
     "accessDenied": "غير مصرح لك بالدخول",
     "accessDeniedHint": "هذا التطبيق للمالك فقط. تم تسجيل خروجك.",
     "idleWarning": "جلستك هتنتهي خلال دقيقتين",
