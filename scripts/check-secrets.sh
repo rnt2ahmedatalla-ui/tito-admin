@@ -13,10 +13,13 @@ PATTERNS=(
 )
 
 FAILED=0
+SELF="scripts/check-secrets.sh"
 
 for pattern in "${PATTERNS[@]}"; do
-  if git ls-files -z 2>/dev/null | xargs -0 grep -l -E "$pattern" 2>/dev/null; then
+  matches=$(git ls-files -z 2>/dev/null | xargs -0 grep -l -E "$pattern" 2>/dev/null | grep -v -F "$SELF" || true)
+  if [ -n "$matches" ]; then
     echo "ERROR: Found forbidden pattern: $pattern"
+    echo "$matches"
     FAILED=1
   fi
 done
