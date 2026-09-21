@@ -15,7 +15,7 @@
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "5.1.0",
     "@fontsource/sora": "5.1.0",
-    "@supabase/supabase-js": "2.47.10",
+    "@supabase/supabase-js": "2.116.0",
     "@tanstack/react-query": "5.62.8",
     "@tanstack/react-virtual": "3.11.2",
     "date-fns": "4.1.0",
