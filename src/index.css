@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --espresso: #341a0e;
+  --gold: #cc9542;
+  --bark: #5e3813;
+  --cream: #faf6f0;
+  --sand: #efe4d4;
+  --gold-soft: #e3b871;
+  --ink-70: #5c463a;
+  --success: #1f7a4d;
+  --warning: #b7791f;
+  --danger: #b42318;
+  --info: #2563a8;
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    font-family: 'IBM Plex Sans Arabic', Tajawal, Cairo, system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-cream text-espresso antialiased;
+    line-height: 1.7;
+  }
+
+  .font-latin {
+    font-family: Sora, Inter, system-ui, sans-serif;
+    line-height: 1.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
