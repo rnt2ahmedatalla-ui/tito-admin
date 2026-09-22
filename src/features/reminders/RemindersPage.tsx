@@ -14,17 +14,23 @@ import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
 import { first } from '@/lib/booking';
 
-type Tab = 'today' | 'tomorrow';
+type Tab = 'today' | 'tomorrow' | 'upcoming';
 
 export function RemindersPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>('upcoming');
   const [notSentOnly, setNotSentOnly] = useState(true);
   const [focusIndex, setFocusIndex] = useState(0);
 
-  const targetDate = tab === 'today' ? new Date() : addDays(new Date(), 1);
-  const bounds = cairoDayBounds(targetDate);
+  const range = useMemo(() => {
+    if (tab === 'today') return cairoDayBounds(new Date());
+    if (tab === 'tomorrow') return cairoDayBounds(addDays(new Date(), 1));
+    // Upcoming: today → +14 days
+    const start = cairoDayBounds(new Date()).start;
+    const end = cairoDayBounds(addDays(new Date(), 14)).end;
+    return { start, end };
+  }, [tab]);
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
@@ -37,14 +43,14 @@ export function RemindersPage() {
   });
 
   const bookingsQuery = useQuery({
-    queryKey: ['reminders', tab, bounds.start],
+    queryKey: ['reminders', tab, range.start, range.end],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
         .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone)')
         .eq('status', 'confirmed')
-        .gte('start_at', bounds.start)
-        .lte('start_at', bounds.end)
+        .gte('start_at', range.start)
+        .lte('start_at', range.end)
         .order('start_at', { ascending: true });
       if (error) throw error;
       return (data ?? []) as BookingWithRelations[];
@@ -115,6 +121,9 @@ export function RemindersPage() {
         <Button variant={tab === 'tomorrow' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('tomorrow')}>
           {t('reminders.tomorrow')}
         </Button>
+        <Button variant={tab === 'upcoming' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('upcoming')}>
+          {t('reminders.upcoming')}
+        </Button>
         <Button
           variant={notSentOnly ? 'primary' : 'ghost'}
           size="sm"
@@ -127,7 +136,10 @@ export function RemindersPage() {
       {bookingsQuery.isLoading ? (
         <Skeleton className="h-48" />
       ) : bookings.length === 0 ? (
-        <p className="text-center text-ink-70 py-8">{t('app.noResults')}</p>
+        <div className="space-y-2 py-8 text-center">
+          <p className="text-ink-70">{t('reminders.empty')}</p>
+          <p className="text-sm text-ink-70">{t('reminders.emptyHint')}</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {bookings.map((booking, i) => {
@@ -146,7 +158,8 @@ export function RemindersPage() {
                   <div>
                     <p className="font-semibold">{first(booking.profile)?.full_name}</p>
                     <p className="text-sm font-latin text-ink-70">
-                      {formatCairoTime(booking.start_at, locale)} — {first(booking.profile)?.phone}
+                      {formatCairoDateShort(booking.start_at)} · {formatCairoTime(booking.start_at, locale)} —{' '}
+                      {first(booking.profile)?.phone}
                     </p>
                     <p className="text-sm text-ink-70">
                       {locale === 'ar' ? booking.service_name_ar : booking.service_name_en}
