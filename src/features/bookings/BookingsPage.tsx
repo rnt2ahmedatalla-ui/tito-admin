@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,76 +27,64 @@ export function BookingsPage() {
   const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [page, setPage] = useState(0);
-  const [rows, setRows] = useState<BookingWithRelations[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
   const [selected, setSelected] = useState<BookingWithRelations | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
-  const resetList = () => {
-    setPage(0);
-    setRows([]);
-    setTotalCount(0);
-  };
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      resetList();
-    }, 350);
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on search text
   }, [search]);
 
-  useEffect(() => {
-    resetList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, dateFrom, dateTo]);
-
-  const { isLoading, isFetching } = useQuery({
-    queryKey: ['bookings', 'list', debouncedSearch, statusFilter, dateFrom, dateTo, page],
-    queryFn: async () => {
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['bookings', 'list', debouncedSearch, statusFilter, dateFrom, dateTo],
+    queryFn: async ({ pageParam }) => {
       let query = supabase
         .from('bookings')
         .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*)', {
           count: 'exact',
         })
         .order('start_at', { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
 
       if (statusFilter.length > 0) query = query.in('status', statusFilter);
       if (dateFrom) query = query.gte('start_at', `${dateFrom}T00:00:00`);
       if (dateTo) query = query.lte('start_at', `${dateTo}T23:59:59`);
 
-      if (debouncedSearch.trim()) {
+      if (debouncedSearch) {
         const { data: customers, error: searchErr } = await supabase.rpc('admin_search_customers', {
-          p_q: debouncedSearch.trim(),
+          p_q: debouncedSearch,
           p_limit: 50,
           p_offset: 0,
         });
         if (searchErr) throw searchErr;
         const ids = (customers as Array<{ id: string }>).map((c) => c.id);
-        if (ids.length === 0) {
-          setRows([]);
-          setTotalCount(0);
-          return { rows: [], count: 0 };
-        }
+        if (ids.length === 0) return { rows: [] as BookingWithRelations[], count: 0 };
         query = query.in('user_id', ids);
       }
 
       const { data: pageRows, error, count } = await query;
       if (error) throw error;
-      const next = (pageRows ?? []) as unknown as BookingWithRelations[];
-      setTotalCount(count ?? 0);
-      setRows((prev) => {
-        if (page === 0) return next;
-        const seen = new Set(prev.map((b) => b.id));
-        return [...prev, ...next.filter((b) => !seen.has(b.id))];
-      });
-      return { rows: next, count: count ?? 0 };
+      return {
+        rows: (pageRows ?? []) as unknown as BookingWithRelations[],
+        count: count ?? 0,
+      };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.rows.length, 0);
+      if (last.rows.length < PAGE_SIZE || loaded >= last.count) return undefined;
+      return pages.length;
     },
     staleTime: 15_000,
   });
+
+  const rows = useMemo(() => data?.pages.flatMap((p) => p.rows) ?? [], [data]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -132,8 +120,6 @@ export function BookingsPage() {
     URL.revokeObjectURL(url);
     toast.success(t('app.export'));
   }, [rows, i18n.language, t]);
-
-  const hasMore = rows.length < totalCount;
 
   return (
     <div className="space-y-4">
@@ -181,7 +167,7 @@ export function BookingsPage() {
         />
       </div>
 
-      {isLoading && rows.length === 0 ? (
+      {isLoading ? (
         <Skeleton className="h-64" />
       ) : (
         <div ref={parentRef} className="h-[60vh] overflow-auto rounded-card border border-bark/15 bg-white">
@@ -218,8 +204,12 @@ export function BookingsPage() {
         </div>
       )}
 
-      {hasMore ? (
-        <Button variant="secondary" loading={isFetching} onClick={() => setPage((p) => p + 1)}>
+      {hasNextPage ? (
+        <Button
+          variant="secondary"
+          loading={isFetchingNextPage}
+          onClick={() => void fetchNextPage()}
+        >
           {t('app.loadMore')}
         </Button>
       ) : null}

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -19,43 +19,38 @@ export function CustomersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [customers, setCustomers] = useState<CustomerSearchResult[]>([]);
-  const [hasMore, setHasMore] = useState(true);
   const [blockTarget, setBlockTarget] = useState<CustomerSearchResult | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(0);
-      setCustomers([]);
-      setHasMore(true);
-    }, 350);
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { isLoading, isFetching } = useQuery({
-    queryKey: ['customers', debouncedSearch, page],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_search_customers', {
-        p_q: debouncedSearch.trim(),
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['customers', debouncedSearch],
+    queryFn: async ({ pageParam }) => {
+      const { data: rows, error } = await supabase.rpc('admin_search_customers', {
+        p_q: debouncedSearch,
         p_limit: PAGE_SIZE,
-        p_offset: page * PAGE_SIZE,
+        p_offset: pageParam * PAGE_SIZE,
       });
       if (error) throw error;
-      const rows = (data ?? []) as CustomerSearchResult[];
-
-      setCustomers((prev) => {
-        if (page === 0) return rows;
-        const seen = new Set(prev.map((c) => c.id));
-        return [...prev, ...rows.filter((c) => !seen.has(c.id))];
-      });
-      setHasMore(rows.length >= PAGE_SIZE);
-      return rows;
+      return (rows ?? []) as CustomerSearchResult[];
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length < PAGE_SIZE ? undefined : pages.length,
     staleTime: 15_000,
   });
+
+  const customers = useMemo(() => data?.pages.flat() ?? [], [data]);
 
   const blockMutation = useMutation({
     mutationFn: async ({ id, blocked }: { id: string; blocked: boolean }) => {
@@ -66,9 +61,6 @@ export function CustomersPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      setPage(0);
-      setCustomers([]);
-      setHasMore(true);
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
       setBlockTarget(null);
       toast.success(t('app.confirm'));
@@ -83,8 +75,6 @@ export function CustomersPage() {
     overscan: 5,
   });
 
-  const showEmpty = !isLoading && customers.length === 0;
-
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">{t('customers.title')}</h1>
@@ -95,9 +85,9 @@ export function CustomersPage() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      {isLoading && customers.length === 0 ? (
+      {isLoading ? (
         <Skeleton className="h-64" />
-      ) : showEmpty ? (
+      ) : customers.length === 0 ? (
         <p className="py-8 text-center text-ink-70">{t('app.noResults')}</p>
       ) : (
         <div
@@ -146,11 +136,11 @@ export function CustomersPage() {
         </div>
       )}
 
-      {hasMore && customers.length > 0 ? (
+      {hasNextPage ? (
         <Button
           variant="secondary"
-          loading={isFetching}
-          onClick={() => setPage((p) => p + 1)}
+          loading={isFetchingNextPage}
+          onClick={() => void fetchNextPage()}
         >
           {t('app.loadMore')}
         </Button>
