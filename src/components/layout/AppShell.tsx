@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 import { CountBadge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
 import { setLanguage } from '@/lib/i18n';
@@ -38,6 +37,27 @@ const sidebarLinks = [
   { to: '/more/maintenance', labelKey: 'nav.maintenance' },
 ];
 
+function SidebarAction({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: typeof Globe;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-btn border border-cream/20 bg-bark/25 px-3 py-2.5 text-sm font-medium text-cream transition-colors hover:bg-bark/45 hover:text-gold"
+    >
+      <Icon className="size-4 shrink-0 text-gold" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 export function AppShell() {
   const { t, i18n } = useTranslation();
   const { signOut } = useAuth();
@@ -48,13 +68,18 @@ export function AppShell() {
   useGlobalShortcuts(undefined, () => setShowHelp((v) => !v));
 
   const toggleLang = () => {
-    setLanguage(i18n.language === 'ar' ? 'en' : 'ar');
+    const next = i18n.language?.startsWith('ar') ? 'en' : 'ar';
+    setLanguage(next);
+  };
+
+  const handleSignOut = () => {
+    void signOut();
   };
 
   return (
     <div className="flex min-h-dvh bg-cream font-arabic">
       <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:bg-espresso lg:text-cream">
-        <div className="flex h-16 items-center gap-3 px-5 border-b border-white/5">
+        <div className="flex h-16 items-center gap-3 border-b border-white/5 px-5">
           <Logo mark height={34} />
           <span className="text-sm font-semibold tracking-wide text-gold font-latin">tito</span>
         </div>
@@ -72,7 +97,7 @@ export function AppShell() {
                     'relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-150',
                     isActive
                       ? 'bg-bark/30 text-gold before:absolute before:inset-y-1 before:start-0 before:w-1 before:rounded-e before:bg-gold'
-                      : 'text-cream/80 hover:text-cream hover:bg-bark/20',
+                      : 'text-cream/80 hover:bg-bark/20 hover:text-cream',
                   )
                 }
               >
@@ -83,35 +108,42 @@ export function AppShell() {
             );
           })}
         </nav>
-        <div className="space-y-2 border-t border-white/5 p-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-cream/85 hover:bg-bark/30 hover:text-cream"
+        <div className="space-y-2 border-t border-white/10 p-4">
+          <SidebarAction
+            icon={Globe}
+            label={i18n.language?.startsWith('ar') ? 'English' : 'عربي'}
             onClick={toggleLang}
-          >
-            <Globe className="size-4" />
-            {t('app.language')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-cream/85 hover:bg-bark/30 hover:text-cream"
-            onClick={() => void signOut()}
-          >
-            <LogOut className="size-4" />
-            {t('app.signOut')}
-          </Button>
+          />
+          <SidebarAction icon={LogOut} label={t('app.signOut')} onClick={handleSignOut} />
         </div>
       </aside>
 
       <div className="flex flex-1 flex-col lg:ms-64">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/5 bg-espresso px-4 text-cream lg:hidden">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-white/5 bg-espresso px-3 text-cream lg:hidden">
           <div className="flex items-center gap-2">
             <Logo mark height={28} />
             <span className="text-sm font-semibold text-gold font-latin">tito</span>
           </div>
-          <CountBadge count={paymentsCount} />
+          <div className="flex items-center gap-1">
+            <CountBadge count={paymentsCount} />
+            <button
+              type="button"
+              onClick={toggleLang}
+              className="inline-flex min-h-10 items-center gap-1 rounded-btn px-2.5 text-sm text-cream hover:bg-bark/40"
+              aria-label={t('app.language')}
+            >
+              <Globe className="size-4 text-gold" />
+              {i18n.language?.startsWith('ar') ? 'EN' : 'ع'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="inline-flex min-h-10 items-center gap-1 rounded-btn px-2.5 text-sm text-cream hover:bg-bark/40"
+              aria-label={t('app.signOut')}
+            >
+              <LogOut className="size-4 text-gold" />
+            </button>
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-content flex-1 p-4 pb-24 lg:p-6 lg:pb-6">
@@ -156,8 +188,8 @@ export function AppShell() {
       {showHelp ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog">
           <div className="absolute inset-0 bg-espresso/50" onClick={() => setShowHelp(false)} />
-          <div className="relative rounded-card bg-white p-4 shadow-warm-lg max-w-sm w-full">
-            <h3 className="font-semibold mb-3">{t('app.keyboardHelp')}</h3>
+          <div className="relative w-full max-w-sm rounded-card bg-white p-4 shadow-warm-lg">
+            <h3 className="mb-3 font-semibold">{t('app.keyboardHelp')}</h3>
             <ul className="space-y-1 text-sm text-ink-70">
               <li>{t('shortcuts.search')}</li>
               <li>{t('shortcuts.tabs')}</li>

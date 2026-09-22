@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +27,6 @@ export function BookingsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selected, setSelected] = useState<BookingWithRelations | null>(null);
-  const parentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -38,17 +36,21 @@ export function BookingsPage() {
   const {
     data,
     isLoading,
+    isError,
+    error,
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
+    refetch,
   } = useInfiniteQuery({
     queryKey: ['bookings', 'list', debouncedSearch, statusFilter, dateFrom, dateTo],
     queryFn: async ({ pageParam }) => {
       let query = supabase
         .from('bookings')
-        .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*)', {
-          count: 'exact',
-        })
+        .select(
+          '*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*)',
+          { count: 'exact' },
+        )
         .order('start_at', { ascending: false })
         .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
 
@@ -68,8 +70,8 @@ export function BookingsPage() {
         query = query.in('user_id', ids);
       }
 
-      const { data: pageRows, error, count } = await query;
-      if (error) throw error;
+      const { data: pageRows, error: qErr, count } = await query;
+      if (qErr) throw qErr;
       return {
         rows: (pageRows ?? []) as unknown as BookingWithRelations[],
         count: count ?? 0,
@@ -85,13 +87,6 @@ export function BookingsPage() {
   });
 
   const rows = useMemo(() => data?.pages.flatMap((p) => p.rows) ?? [], [data]);
-
-  const virtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 72,
-    overscan: 5,
-  });
 
   const toggleStatus = (status: BookingStatus) => {
     setStatusFilter((prev) =>
@@ -143,7 +138,7 @@ export function BookingsPage() {
             key={s}
             type="button"
             onClick={() => toggleStatus(s)}
-            className={`rounded-full px-2 py-1 text-xs border ${
+            className={`rounded-full border px-2 py-1 text-xs ${
               statusFilter.includes(s) ? 'border-gold bg-gold/10' : 'border-bark/20'
             }`}
           >
@@ -169,38 +164,41 @@ export function BookingsPage() {
 
       {isLoading ? (
         <Skeleton className="h-64" />
+      ) : isError ? (
+        <div className="space-y-3 py-12 text-center">
+          <p className="text-ink-70">
+            {error instanceof Error ? error.message : t('app.noResults')}
+          </p>
+          <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+            {t('app.retry', { defaultValue: 'Retry' })}
+          </Button>
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="py-12 text-center text-ink-70">{t('app.noResults')}</p>
       ) : (
-        <div ref={parentRef} className="h-[60vh] overflow-auto rounded-card border border-bark/15 bg-white">
-          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
-            {virtualizer.getVirtualItems().map((item) => {
-              const booking = rows[item.index];
-              if (!booking) return null;
-              return (
-                <button
-                  key={booking.id}
-                  type="button"
-                  onClick={() => setSelected(booking)}
-                  className="absolute inset-x-0 flex items-center justify-between gap-2 border-b border-bark/10 px-4 py-3 text-start hover:bg-sand/30"
-                  style={{
-                    height: `${item.size}px`,
-                    transform: `translateY(${item.start}px)`,
-                  }}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{first(booking.profile)?.full_name}</p>
-                    <p className="text-sm text-ink-70 font-latin">
-                      {formatCairoDateShort(booking.start_at)}{' '}
-                      {formatCairoTime(booking.start_at, i18n.language)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-sm font-latin">{formatEGP(booking.price_egp)}</span>
-                    <StatusBadge status={booking.status} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+        <div className="overflow-hidden rounded-card border border-bark/15 bg-white">
+          {rows.map((booking) => (
+            <button
+              key={booking.id}
+              type="button"
+              onClick={() => setSelected(booking)}
+              className="flex w-full items-center justify-between gap-2 border-b border-bark/10 px-4 py-3 text-start last:border-b-0 hover:bg-sand/30"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium">{first(booking.profile)?.full_name ?? '—'}</p>
+                <p className="text-sm text-ink-70 font-latin">
+                  {formatCairoDateShort(booking.start_at)}{' '}
+                  {formatCairoTime(booking.start_at, i18n.language)}
+                  {' · '}
+                  {i18n.language === 'ar' ? booking.service_name_ar : booking.service_name_en}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-sm font-latin">{formatEGP(booking.price_egp)}</span>
+                <StatusBadge status={booking.status} />
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
