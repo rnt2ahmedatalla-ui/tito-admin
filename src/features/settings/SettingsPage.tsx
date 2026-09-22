@@ -111,15 +111,15 @@ export function SettingsPage() {
       <Card>
         <CardHeader><h2 className="font-semibold">{t('settings.booking')}</h2></CardHeader>
         <CardBody className="grid gap-3 sm:grid-cols-2">
-          <Input label="slot_step_min" type="number" value={form.slot_step_min ?? ''} onChange={(e) => update({ slot_step_min: Number(e.target.value) })} />
-          <Input label="min_hours_before" type="number" value={form.min_hours_before ?? ''} onChange={(e) => update({ min_hours_before: Number(e.target.value) })} />
-          <Input label="max_days_ahead" type="number" value={form.max_days_ahead ?? ''} onChange={(e) => update({ max_days_ahead: Number(e.target.value) })} />
-          <Input label="cancel_window_hours" type="number" value={form.cancel_window_hours ?? ''} onChange={(e) => update({ cancel_window_hours: Number(e.target.value) })} />
-          <Input label="hold_minutes" type="number" value={form.hold_minutes ?? ''} onChange={(e) => update({ hold_minutes: Number(e.target.value) })} />
-          <Input label="max_active_pending_per_user" type="number" value={form.max_active_pending_per_user ?? ''} onChange={(e) => update({ max_active_pending_per_user: Number(e.target.value) })} />
+          <Input label={t('settings.slotStep')} type="number" value={form.slot_step_min ?? ''} onChange={(e) => update({ slot_step_min: Number(e.target.value) })} />
+          <Input label={t('settings.minHoursBefore')} type="number" value={form.min_hours_before ?? ''} onChange={(e) => update({ min_hours_before: Number(e.target.value) })} />
+          <Input label={t('settings.maxDaysAhead')} type="number" value={form.max_days_ahead ?? ''} onChange={(e) => update({ max_days_ahead: Number(e.target.value) })} />
+          <Input label={t('settings.cancelWindow')} type="number" value={form.cancel_window_hours ?? ''} onChange={(e) => update({ cancel_window_hours: Number(e.target.value) })} />
+          <Input label={t('settings.holdMinutes')} type="number" value={form.hold_minutes ?? ''} onChange={(e) => update({ hold_minutes: Number(e.target.value) })} />
+          <Input label={t('settings.maxPending')} type="number" value={form.max_active_pending_per_user ?? ''} onChange={(e) => update({ max_active_pending_per_user: Number(e.target.value) })} />
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={form.auto_complete ?? false} onChange={(e) => update({ auto_complete: e.target.checked })} />
-            auto_complete
+            {t('settings.autoComplete')}
           </label>
           <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
@@ -130,12 +130,12 @@ export function SettingsPage() {
         <CardBody className="grid gap-3">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={form.allow_pay_at_shop ?? false} onChange={(e) => update({ allow_pay_at_shop: e.target.checked })} />
-            allow_pay_at_shop
+            {t('settings.allowPayAtShop')}
           </label>
-          <Input label="instapay_number" value={form.instapay_number ?? ''} onChange={(e) => update({ instapay_number: e.target.value })} />
-          <Input label="vodafone_cash_number" value={form.vodafone_cash_number ?? ''} onChange={(e) => update({ vodafone_cash_number: e.target.value })} />
-          <Input label="payment_note_ar" value={form.payment_note_ar ?? ''} onChange={(e) => update({ payment_note_ar: e.target.value })} />
-          <Input label="payment_note_en" value={form.payment_note_en ?? ''} onChange={(e) => update({ payment_note_en: e.target.value })} />
+          <Input label={t('settings.instapay')} value={form.instapay_number ?? ''} onChange={(e) => update({ instapay_number: e.target.value })} />
+          <Input label={t('settings.vodafone')} value={form.vodafone_cash_number ?? ''} onChange={(e) => update({ vodafone_cash_number: e.target.value })} />
+          <Input label={t('settings.paymentNoteAr')} value={form.payment_note_ar ?? ''} onChange={(e) => update({ payment_note_ar: e.target.value })} />
+          <Input label={t('settings.paymentNoteEn')} value={form.payment_note_en ?? ''} onChange={(e) => update({ payment_note_en: e.target.value })} />
           <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>
@@ -143,9 +143,9 @@ export function SettingsPage() {
       <Card>
         <CardHeader><h2 className="font-semibold">{t('settings.shop')}</h2></CardHeader>
         <CardBody className="grid gap-3">
-          <Input label="shop_name" value={form.shop_name ?? ''} onChange={(e) => update({ shop_name: e.target.value })} />
-          <Input label="shop_whatsapp" value={form.shop_whatsapp ?? ''} onChange={(e) => update({ shop_whatsapp: e.target.value })} />
-          <Input label="timezone" value="Africa/Cairo" readOnly disabled />
+          <Input label={t('settings.shopName')} value={form.shop_name ?? ''} onChange={(e) => update({ shop_name: e.target.value })} />
+          <Input label={t('settings.shopWhatsapp')} value={form.shop_whatsapp ?? ''} onChange={(e) => update({ shop_whatsapp: e.target.value })} />
+          <Input label={t('settings.timezone')} value="Africa/Cairo" readOnly disabled />
           <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>
@@ -156,12 +156,12 @@ export function SettingsPage() {
           <p className="text-sm text-ink-70">{t('settings.placeholders')}</p>
         </CardHeader>
         <CardBody className="grid gap-3">
-          <Input label="reminder_template_ar" value={form.reminder_template_ar ?? ''} onChange={(e) => update({ reminder_template_ar: e.target.value })} />
-          <Input label="reminder_template_en" value={form.reminder_template_en ?? ''} onChange={(e) => update({ reminder_template_en: e.target.value })} />
-          <Input label="confirmation_template_ar" value={form.confirmation_template_ar ?? ''} onChange={(e) => update({ confirmation_template_ar: e.target.value })} />
-          <Input label="confirmation_template_en" value={form.confirmation_template_en ?? ''} onChange={(e) => update({ confirmation_template_en: e.target.value })} />
-          <Input label="cancellation_template_ar" value={form.cancellation_template_ar ?? ''} onChange={(e) => update({ cancellation_template_ar: e.target.value })} />
-          <Input label="cancellation_template_en" value={form.cancellation_template_en ?? ''} onChange={(e) => update({ cancellation_template_en: e.target.value })} />
+          <Input label={t('settings.reminderAr')} value={form.reminder_template_ar ?? ''} onChange={(e) => update({ reminder_template_ar: e.target.value })} />
+          <Input label={t('settings.reminderEn')} value={form.reminder_template_en ?? ''} onChange={(e) => update({ reminder_template_en: e.target.value })} />
+          <Input label={t('settings.confirmAr')} value={form.confirmation_template_ar ?? ''} onChange={(e) => update({ confirmation_template_ar: e.target.value })} />
+          <Input label={t('settings.confirmEn')} value={form.confirmation_template_en ?? ''} onChange={(e) => update({ confirmation_template_en: e.target.value })} />
+          <Input label={t('settings.cancelAr')} value={form.cancellation_template_ar ?? ''} onChange={(e) => update({ cancellation_template_ar: e.target.value })} />
+          <Input label={t('settings.cancelEn')} value={form.cancellation_template_en ?? ''} onChange={(e) => update({ cancellation_template_en: e.target.value })} />
           <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>

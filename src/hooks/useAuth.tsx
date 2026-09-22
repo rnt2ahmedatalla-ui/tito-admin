@@ -19,7 +19,7 @@ interface AuthContextValue {
   state: AuthState;
   user: User | null;
   session: Session | null;
-  signInWithGoogle: () => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetIdleTimer: () => void;
 }
@@ -28,25 +28,6 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const IDLE_WARNING_MS = 28 * 60 * 1000;
-
-function getOAuthRedirectTo(): string {
-  const base = import.meta.env.BASE_URL || '/';
-  return `${window.location.origin}${base}`;
-}
-
-function stripOAuthParamsFromUrl() {
-  const url = new URL(window.location.href);
-  let dirty = false;
-  for (const key of ['code', 'state', 'error', 'error_description']) {
-    if (url.searchParams.has(key)) {
-      url.searchParams.delete(key);
-      dirty = true;
-    }
-  }
-  if (dirty) {
-    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
-  }
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -71,33 +52,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState('unauthenticated');
   }, [clearTimers, queryClient]);
 
-  const checkAdmin = useCallback(async (sess: Session | null) => {
-    if (!sess) {
-      setSession(null);
-      setState('unauthenticated');
-      return;
-    }
+  const checkAdmin = useCallback(
+    async (sess: Session | null) => {
+      if (!sess) {
+        setSession(null);
+        setState('unauthenticated');
+        return;
+      }
 
-    const { data, error } = await supabase.rpc('is_admin');
-    if (error) {
-      console.error('[admin-auth] is_admin', error.message);
+      const { data, error } = await supabase.rpc('is_admin');
+      if (error) {
+        console.error('[admin-auth] is_admin', error.message);
+        setSession(sess);
+        setState('denied');
+        return;
+      }
+
+      if (!data) {
+        await supabase.auth.signOut();
+        queryClient.clear();
+        setSession(null);
+        setState('denied');
+        return;
+      }
+
       setSession(sess);
-      setState('denied');
-      return;
-    }
-
-    if (!data) {
-      await supabase.auth.signOut();
-      queryClient.clear();
-      setSession(null);
-      setState('denied');
-      return;
-    }
-
-    setSession(sess);
-    setState('authenticated');
-    stripOAuthParamsFromUrl();
-  }, [queryClient]);
+      setState('authenticated');
+    },
+    [queryClient],
+  );
 
   const resetIdleTimer = useCallback(() => {
     if (state !== 'authenticated') return;
@@ -164,14 +147,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [state, resetIdleTimer, clearTimers]);
 
-  const signInWithGoogle = useCallback(async () => {
-    const redirectTo = getOAuthRedirectTo();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-        queryParams: { access_type: 'offline', prompt: 'select_account' },
-      },
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
     });
     if (error) throw error;
   }, []);
@@ -181,11 +160,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       state,
       user: session?.user ?? null,
       session,
-      signInWithGoogle,
+      signInWithPassword,
       signOut,
       resetIdleTimer,
     }),
-    [state, session, signInWithGoogle, signOut, resetIdleTimer],
+    [state, session, signInWithPassword, signOut, resetIdleTimer],
   );
 
   return (
@@ -199,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           <p className="font-medium">{t('app.idleWarning')}</p>
           <button
             type="button"
-            className="mt-2 text-gold font-semibold underline"
+            className="mt-2 font-semibold text-gold underline"
             onClick={resetIdleTimer}
           >
             {t('app.stayConnected')}

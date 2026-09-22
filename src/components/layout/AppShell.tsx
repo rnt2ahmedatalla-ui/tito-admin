@@ -54,8 +54,9 @@ export function AppShell() {
   return (
     <div className="flex min-h-dvh bg-cream font-arabic">
       <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:bg-espresso lg:text-cream">
-        <div className="flex h-16 items-center px-5 border-b border-white/5">
-          <Logo className="h-[32px] w-auto" />
+        <div className="flex h-16 items-center gap-3 px-5 border-b border-white/5">
+          <Logo mark height={34} />
+          <span className="text-sm font-semibold tracking-wide text-gold font-latin">tito</span>
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
           {sidebarLinks.map((link) => {
@@ -96,7 +97,10 @@ export function AppShell() {
 
       <div className="flex flex-1 flex-col lg:ms-64">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/5 bg-espresso px-4 text-cream lg:hidden">
-          <Logo className="h-[28px] w-auto" />
+          <div className="flex items-center gap-2">
+            <Logo mark height={28} />
+            <span className="text-sm font-semibold text-gold font-latin">tito</span>
+          </div>
           <CountBadge count={paymentsCount} />
         </header>
 
