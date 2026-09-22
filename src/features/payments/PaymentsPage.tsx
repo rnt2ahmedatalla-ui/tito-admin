@@ -175,12 +175,14 @@ export function PaymentsPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem(SOUND_KEY) === 'true');
 
-  const { data: payments = [], isLoading } = useQuery({
+  const { data: payments = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payments', 'queue'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payments')
-        .select('*, booking:bookings(*), profile:profiles(full_name, phone)')
+        .select(
+          '*, booking:bookings!payments_booking_id_fkey(*), profile:profiles!payments_user_id_fkey(full_name, phone)',
+        )
         .eq('status', 'submitted')
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -291,6 +293,13 @@ export function PaymentsPage() {
         <div className="space-y-4">
           <Skeleton className="h-48" />
           <Skeleton className="h-48" />
+        </div>
+      ) : isError ? (
+        <div className="space-y-3 py-12 text-center">
+          <p className="text-ink-70">{error instanceof Error ? error.message : t('payments.empty')}</p>
+          <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+            {t('app.retry', { defaultValue: 'Retry' })}
+          </Button>
         </div>
       ) : payments.length === 0 ? (
         <p className="py-12 text-center text-ink-70">{t('payments.empty')}</p>

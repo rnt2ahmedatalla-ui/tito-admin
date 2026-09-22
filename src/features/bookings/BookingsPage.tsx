@@ -41,7 +41,9 @@ export function BookingsPage() {
     queryFn: async () => {
       let query = supabase
         .from('bookings')
-        .select('*, profile:profiles(full_name, phone), payment:payments(*)', { count: 'exact' })
+        .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*)', {
+          count: 'exact',
+        })
         .order('start_at', { ascending: false })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 

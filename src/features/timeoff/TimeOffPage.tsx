@@ -38,7 +38,7 @@ export function TimeOffPage() {
   const checkOverlap = async () => {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*, profile:profiles(full_name, phone)')
+      .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone)')
       .in('status', ['confirmed', 'pending_payment'])
       .gte('start_at', form.start_at)
       .lte('start_at', form.end_at);

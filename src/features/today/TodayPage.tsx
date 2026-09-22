@@ -51,7 +51,7 @@ export function TodayPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
-        .select('*, profile:profiles(full_name, phone), payment:payments(*)')
+        .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*)')
         .gte('start_at', bounds.start)
         .lte('start_at', bounds.end)
         .order('start_at', { ascending: true });

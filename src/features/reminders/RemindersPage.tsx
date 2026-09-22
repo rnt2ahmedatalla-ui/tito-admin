@@ -41,7 +41,7 @@ export function RemindersPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
-        .select('*, profile:profiles(full_name, phone)')
+        .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone)')
         .eq('status', 'confirmed')
         .gte('start_at', bounds.start)
         .lte('start_at', bounds.end)
