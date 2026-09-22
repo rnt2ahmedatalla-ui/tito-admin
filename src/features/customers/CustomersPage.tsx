@@ -20,15 +20,22 @@ export function CustomersPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [customers, setCustomers] = useState<CustomerSearchResult[]>([]);
+  const [hasMore, setHasMore] = useState(true);
   const [blockTarget, setBlockTarget] = useState<CustomerSearchResult | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+      setCustomers([]);
+      setHasMore(true);
+    }, 350);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data: customers = [], isLoading, isFetching } = useQuery({
+  const { isLoading, isFetching } = useQuery({
     queryKey: ['customers', debouncedSearch, page],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('admin_search_customers', {
@@ -37,7 +44,15 @@ export function CustomersPage() {
         p_offset: page * PAGE_SIZE,
       });
       if (error) throw error;
-      return (data ?? []) as CustomerSearchResult[];
+      const rows = (data ?? []) as CustomerSearchResult[];
+
+      setCustomers((prev) => {
+        if (page === 0) return rows;
+        const seen = new Set(prev.map((c) => c.id));
+        return [...prev, ...rows.filter((c) => !seen.has(c.id))];
+      });
+      setHasMore(rows.length >= PAGE_SIZE);
+      return rows;
     },
     staleTime: 15_000,
   });
@@ -51,6 +66,9 @@ export function CustomersPage() {
       if (error) throw error;
     },
     onSuccess: () => {
+      setPage(0);
+      setCustomers([]);
+      setHasMore(true);
       void queryClient.invalidateQueries({ queryKey: ['customers'] });
       setBlockTarget(null);
       toast.success(t('app.confirm'));
@@ -65,6 +83,8 @@ export function CustomersPage() {
     overscan: 5,
   });
 
+  const showEmpty = !isLoading && customers.length === 0;
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">{t('customers.title')}</h1>
@@ -72,15 +92,18 @@ export function CustomersPage() {
       <Input
         placeholder={t('app.search')}
         value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+        onChange={(e) => setSearch(e.target.value)}
       />
 
-      {isLoading ? (
+      {isLoading && customers.length === 0 ? (
         <Skeleton className="h-64" />
-      ) : customers.length === 0 ? (
-        <p className="text-center text-ink-70 py-8">{t('app.noResults')}</p>
+      ) : showEmpty ? (
+        <p className="py-8 text-center text-ink-70">{t('app.noResults')}</p>
       ) : (
-        <div ref={parentRef} className="h-[60vh] overflow-auto rounded-card border border-bark/15 bg-white">
+        <div
+          ref={parentRef}
+          className="h-[60vh] overflow-auto rounded-card border border-bark/15 bg-white"
+        >
           <div className="sticky top-0 grid grid-cols-6 gap-2 border-b border-bark/10 bg-sand/50 px-4 py-2 text-xs font-medium text-ink-70">
             <span>{t('customers.name')}</span>
             <span>{t('customers.phone')}</span>
@@ -96,7 +119,7 @@ export function CustomersPage() {
               return (
                 <div
                   key={c.id}
-                  className="absolute inset-x-0 grid grid-cols-6 gap-2 items-center border-b border-bark/10 px-4 py-3"
+                  className="absolute inset-x-0 grid grid-cols-6 items-center gap-2 border-b border-bark/10 px-4 py-3"
                   style={{ height: `${item.size}px`, transform: `translateY(${item.start}px)` }}
                 >
                   <span className="truncate font-medium">{c.full_name}</span>
@@ -123,9 +146,15 @@ export function CustomersPage() {
         </div>
       )}
 
-      <Button variant="secondary" loading={isFetching} onClick={() => setPage((p) => p + 1)}>
-        {t('app.loadMore')}
-      </Button>
+      {hasMore && customers.length > 0 ? (
+        <Button
+          variant="secondary"
+          loading={isFetching}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          {t('app.loadMore')}
+        </Button>
+      ) : null}
 
       <ConfirmDialog
         open={!!blockTarget}

@@ -28,15 +28,32 @@ export function BookingsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(0);
+  const [rows, setRows] = useState<BookingWithRelations[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [selected, setSelected] = useState<BookingWithRelations | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
+  const resetList = () => {
+    setPage(0);
+    setRows([]);
+    setTotalCount(0);
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      resetList();
+    }, 350);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on search text
   }, [search]);
 
-  const { data, isLoading, isFetching } = useQuery({
+  useEffect(() => {
+    resetList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, dateFrom, dateTo]);
+
+  const { isLoading, isFetching } = useQuery({
     queryKey: ['bookings', 'list', debouncedSearch, statusFilter, dateFrom, dateTo, page],
     queryFn: async () => {
       let query = supabase
@@ -59,18 +76,28 @@ export function BookingsPage() {
         });
         if (searchErr) throw searchErr;
         const ids = (customers as Array<{ id: string }>).map((c) => c.id);
-        if (ids.length === 0) return { rows: [], count: 0 };
+        if (ids.length === 0) {
+          setRows([]);
+          setTotalCount(0);
+          return { rows: [], count: 0 };
+        }
         query = query.in('user_id', ids);
       }
 
-      const { data: rows, error, count } = await query;
+      const { data: pageRows, error, count } = await query;
       if (error) throw error;
-      return { rows: (rows ?? []) as unknown as BookingWithRelations[], count: count ?? 0 };
+      const next = (pageRows ?? []) as unknown as BookingWithRelations[];
+      setTotalCount(count ?? 0);
+      setRows((prev) => {
+        if (page === 0) return next;
+        const seen = new Set(prev.map((b) => b.id));
+        return [...prev, ...next.filter((b) => !seen.has(b.id))];
+      });
+      return { rows: next, count: count ?? 0 };
     },
     staleTime: 15_000,
   });
 
-  const rows = data?.rows ?? [];
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -82,7 +109,6 @@ export function BookingsPage() {
     setStatusFilter((prev) =>
       prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
     );
-    setPage(0);
   };
 
   const exportCsv = useCallback(() => {
@@ -107,6 +133,8 @@ export function BookingsPage() {
     toast.success(t('app.export'));
   }, [rows, i18n.language, t]);
 
+  const hasMore = rows.length < totalCount;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -120,7 +148,7 @@ export function BookingsPage() {
       <Input
         placeholder={t('app.search')}
         value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+        onChange={(e) => setSearch(e.target.value)}
       />
 
       <div className="flex flex-wrap gap-2">
@@ -139,11 +167,21 @@ export function BookingsPage() {
       </div>
 
       <div className="flex gap-2">
-        <Input type="date" label={t('bookings.dateFrom')} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-        <Input type="date" label={t('bookings.dateTo')} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        <Input
+          type="date"
+          label={t('bookings.dateFrom')}
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+        />
+        <Input
+          type="date"
+          label={t('bookings.dateTo')}
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+        />
       </div>
 
-      {isLoading ? (
+      {isLoading && rows.length === 0 ? (
         <Skeleton className="h-64" />
       ) : (
         <div ref={parentRef} className="h-[60vh] overflow-auto rounded-card border border-bark/15 bg-white">
@@ -163,12 +201,13 @@ export function BookingsPage() {
                   }}
                 >
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{first(booking.profile)?.full_name}</p>
+                    <p className="truncate font-medium">{first(booking.profile)?.full_name}</p>
                     <p className="text-sm text-ink-70 font-latin">
-                      {formatCairoDateShort(booking.start_at)} {formatCairoTime(booking.start_at, i18n.language)}
+                      {formatCairoDateShort(booking.start_at)}{' '}
+                      {formatCairoTime(booking.start_at, i18n.language)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     <span className="text-sm font-latin">{formatEGP(booking.price_egp)}</span>
                     <StatusBadge status={booking.status} />
                   </div>
@@ -179,7 +218,7 @@ export function BookingsPage() {
         </div>
       )}
 
-      {(data?.count ?? 0) > (page + 1) * PAGE_SIZE ? (
+      {hasMore ? (
         <Button variant="secondary" loading={isFetching} onClick={() => setPage((p) => p + 1)}>
           {t('app.loadMore')}
         </Button>
