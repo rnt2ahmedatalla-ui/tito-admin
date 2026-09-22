@@ -93,7 +93,7 @@ export function RemindersPage() {
     const message = buildMessage(booking, type);
     const url = buildWhatsAppUrl(phone, message);
     if (!url) {
-      toast.error(t('app.invalidPhone'));
+      toast.error(t('reminders.noPhone'));
       return;
     }
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -102,9 +102,13 @@ export function RemindersPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">{t('reminders.title')}</h1>
+      <div className="border-b border-default pb-4">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold font-latin">WhatsApp</p>
+        <h1 className="mt-1 text-2xl font-bold text-espresso">{t('reminders.title')}</h1>
+        <p className="mt-2 max-w-2xl text-sm text-ink-70">{t('reminders.howBody')}</p>
+      </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant={tab === 'today' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('today')}>
           {t('reminders.today')}
         </Button>

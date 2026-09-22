@@ -75,15 +75,18 @@
   },
   "reminders": {
     "title": "Reminders",
+    "howTitle": "How WhatsApp reminders work",
+    "howBody": "Pick today or tomorrow → tap Send reminder → WhatsApp opens with a ready message to the customer’s number → send from your phone. No WhatsApp Business API needed — one tap.",
     "today": "Today",
     "tomorrow": "Tomorrow",
     "notSent": "Not sent yet",
-    "sendReminder": "Send reminder",
+    "sendReminder": "Send WhatsApp reminder",
     "sendConfirmation": "Send confirmation",
     "sendCancellation": "Send cancellation",
     "sent": "Sent",
     "preview": "Message preview",
-    "next": "Next"
+    "next": "Next",
+    "noPhone": "Customer has no WhatsApp number"
   },
   "bookings": {
     "title": "Bookings",
