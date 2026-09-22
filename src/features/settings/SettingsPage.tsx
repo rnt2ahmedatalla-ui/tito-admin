@@ -20,6 +20,9 @@ const settingsSchema = z.object({
   hold_minutes: z.coerce.number().min(5),
   max_active_pending_per_user: z.coerce.number().min(1),
   auto_complete: z.boolean(),
+  auto_confirm_payment: z.boolean(),
+  auto_reminders: z.boolean(),
+  reminder_minutes_before: z.coerce.number().min(5).max(10080),
   allow_pay_at_shop: z.boolean(),
   instapay_number: z.string().nullable(),
   vodafone_cash_number: z.string().nullable(),
@@ -36,10 +39,16 @@ const settingsSchema = z.object({
   booking_open: z.boolean(),
 });
 
+type WaSecrets = {
+  wa_phone_number_id: string;
+  wa_access_token: string;
+};
+
 export function SettingsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Partial<Settings>>({});
+  const [wa, setWa] = useState<WaSecrets>({ wa_phone_number_id: '', wa_access_token: '' });
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
 
@@ -53,9 +62,32 @@ export function SettingsPage() {
     staleTime: 60_000,
   });
 
+  const secretsQuery = useQuery({
+    queryKey: ['integration-secrets'],
+    queryFn: async () => {
+      const { data: row, error } = await supabase
+        .from('integration_secrets')
+        .select('wa_phone_number_id, wa_access_token')
+        .eq('id', 1)
+        .maybeSingle();
+      if (error) throw error;
+      return row as { wa_phone_number_id: string | null; wa_access_token: string | null } | null;
+    },
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     if (data) setForm(data);
   }, [data]);
+
+  useEffect(() => {
+    if (secretsQuery.data) {
+      setWa({
+        wa_phone_number_id: secretsQuery.data.wa_phone_number_id ?? '',
+        wa_access_token: secretsQuery.data.wa_access_token ?? '',
+      });
+    }
+  }, [secretsQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: Partial<Settings>) => {
@@ -65,6 +97,23 @@ export function SettingsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['settings'] });
       setDirty(false);
+      toast.success(t('app.save'));
+    },
+    onError: (e) => toast.error(mapError(e, t)),
+  });
+
+  const saveWaMutation = useMutation({
+    mutationFn: async (payload: WaSecrets) => {
+      const { error } = await supabase.from('integration_secrets').upsert({
+        id: 1,
+        wa_phone_number_id: payload.wa_phone_number_id.trim() || null,
+        wa_access_token: payload.wa_access_token.trim() || null,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['integration-secrets'] });
       toast.success(t('app.save'));
     },
     onError: (e) => toast.error(mapError(e, t)),
@@ -82,6 +131,11 @@ export function SettingsPage() {
   };
 
   if (isLoading) return <Skeleton className="h-96" />;
+
+  const waConfigured = Boolean(
+    (secretsQuery.data?.wa_phone_number_id || wa.wa_phone_number_id) &&
+      (secretsQuery.data?.wa_access_token || wa.wa_access_token),
+  );
 
   return (
     <div className="space-y-6">
@@ -105,6 +159,79 @@ export function SettingsPage() {
             />
             <span className="text-lg font-semibold">{t('settings.bookingOpen')}</span>
           </label>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-semibold">{t('settings.automation')}</h2>
+          <p className="text-sm text-ink-70">{t('settings.automationHint')}</p>
+        </CardHeader>
+        <CardBody className="grid gap-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 size-5 accent-gold"
+              checked={form.auto_confirm_payment ?? true}
+              onChange={(e) => update({ auto_confirm_payment: e.target.checked })}
+            />
+            <span>
+              <span className="font-medium">{t('settings.autoConfirm')}</span>
+              <span className="mt-0.5 block text-sm text-ink-70">{t('settings.autoConfirmHint')}</span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 size-5 accent-gold"
+              checked={form.auto_reminders ?? true}
+              onChange={(e) => update({ auto_reminders: e.target.checked })}
+            />
+            <span>
+              <span className="font-medium">{t('settings.autoReminders')}</span>
+              <span className="mt-0.5 block text-sm text-ink-70">{t('settings.autoRemindersHint')}</span>
+            </span>
+          </label>
+
+          <Input
+            label={t('settings.reminderMinutesBefore')}
+            type="number"
+            value={form.reminder_minutes_before ?? 60}
+            onChange={(e) => update({ reminder_minutes_before: Number(e.target.value) })}
+          />
+
+          <div className="rounded-btn border border-bark/15 bg-sand/30 p-3 text-sm text-ink-70">
+            {waConfigured ? t('settings.waReady') : t('settings.waNeeded')}
+          </div>
+
+          <Input
+            label={t('settings.waPhoneNumberId')}
+            value={wa.wa_phone_number_id}
+            onChange={(e) => setWa((prev) => ({ ...prev, wa_phone_number_id: e.target.value }))}
+            dir="ltr"
+          />
+          <Input
+            label={t('settings.waAccessToken')}
+            type="password"
+            value={wa.wa_access_token}
+            onChange={(e) => setWa((prev) => ({ ...prev, wa_access_token: e.target.value }))}
+            dir="ltr"
+            autoComplete="off"
+          />
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>
+              {t('app.save')}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void saveWaMutation.mutate(wa)}
+              loading={saveWaMutation.isPending}
+            >
+              {t('settings.saveWa')}
+            </Button>
+          </div>
         </CardBody>
       </Card>
 

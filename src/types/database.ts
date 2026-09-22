@@ -202,6 +202,9 @@ export interface Database {
           hold_minutes: number;
           max_active_pending_per_user: number;
           auto_complete: boolean;
+          auto_confirm_payment: boolean;
+          auto_reminders: boolean;
+          reminder_minutes_before: number;
           allow_pay_at_shop: boolean;
           instapay_number: string | null;
           vodafone_cash_number: string | null;
@@ -228,6 +231,9 @@ export interface Database {
           hold_minutes?: number;
           max_active_pending_per_user?: number;
           auto_complete?: boolean;
+          auto_confirm_payment?: boolean;
+          auto_reminders?: boolean;
+          reminder_minutes_before?: number;
           allow_pay_at_shop?: boolean;
           instapay_number?: string | null;
           vodafone_cash_number?: string | null;
@@ -242,6 +248,26 @@ export interface Database {
           cancellation_template_ar?: string;
           cancellation_template_en?: string;
           booking_open?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      integration_secrets: {
+        Row: {
+          id: number;
+          wa_phone_number_id: string | null;
+          wa_access_token: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          wa_phone_number_id?: string | null;
+          wa_access_token?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          wa_phone_number_id?: string | null;
+          wa_access_token?: string | null;
           updated_at?: string;
         };
         Relationships: [];
