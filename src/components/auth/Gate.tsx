@@ -1,36 +1,46 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ShieldX, Globe } from 'lucide-react';
+import { ShieldX, Globe, Lock, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Logo } from '@/components/brand/Logo';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { setLanguage } from '@/lib/i18n';
+import { cn } from '@/lib/cn';
 
-function AuthBackdrop({ children }: { children: React.ReactNode }) {
+function AuthShell({ children }: { children: React.ReactNode }) {
   const { t, i18n } = useTranslation();
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-espresso px-6">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-espresso px-4 py-10">
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden
         style={{
           background:
-            'radial-gradient(ellipse 70% 50% at 50% 30%, rgba(204,149,66,0.18), transparent 60%)',
+            'radial-gradient(ellipse 80% 55% at 50% 0%, rgba(204,149,66,0.22), transparent 55%), #341A0E',
         }}
       />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        aria-hidden
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(-28deg, transparent, transparent 8px, rgba(204,149,66,0.7) 8px, rgba(204,149,66,0.7) 9px)',
+        }}
+      />
+
       <button
         type="button"
-        className="absolute end-4 top-4 z-10 inline-flex items-center gap-2 rounded-btn border border-cream/15 bg-espresso/60 px-3 py-2 text-sm text-cream/80 backdrop-blur"
+        className="absolute end-4 top-4 z-20 inline-flex items-center gap-2 rounded-btn border border-cream/15 bg-black/20 px-3 py-2 text-sm text-cream/85 backdrop-blur"
         onClick={() => setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
       >
         <Globe className="size-4" />
         {t('app.language')}
       </button>
-      <div className="relative flex w-full max-w-sm flex-col items-center gap-6">{children}</div>
+
+      <div className="relative z-10 w-full max-w-md">{children}</div>
     </div>
   );
 }
@@ -61,64 +71,95 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (state === 'loading') {
     return (
-      <AuthBackdrop>
-        <Logo mark height={48} className="opacity-70" />
-        <Skeleton className="h-4 w-32 bg-bark/40" />
-      </AuthBackdrop>
+      <AuthShell>
+        <div className="flex flex-col items-center gap-4 py-16">
+          <Logo mark height={52} className="opacity-80" />
+          <Skeleton className="h-4 w-36 bg-bark/50" />
+        </div>
+      </AuthShell>
     );
   }
 
   if (state === 'denied') {
     return (
-      <AuthBackdrop>
-        <div className="flex flex-col items-center gap-4 text-center text-cream">
-          <ShieldX className="size-16 text-danger" />
-          <h1 className="text-xl font-semibold">{t('app.accessDenied')}</h1>
-          <p className="max-w-sm text-cream/70">{t('app.accessDeniedHint')}</p>
-          <Button variant="ghost" size="sm" className="text-cream/70" onClick={() => void signOut()}>
+      <AuthShell>
+        <div className="rounded-card border border-cream/10 bg-cream p-8 text-center text-espresso shadow-warm-lg">
+          <ShieldX className="mx-auto size-14 text-danger" />
+          <h1 className="mt-4 text-xl font-bold">{t('app.accessDenied')}</h1>
+          <p className="mt-2 text-sm text-ink-70">{t('app.accessDeniedHint')}</p>
+          <Button className="mt-6 w-full" variant="secondary" onClick={() => void signOut()}>
             {t('app.signOut')}
           </Button>
         </div>
-      </AuthBackdrop>
+      </AuthShell>
     );
   }
 
   if (state === 'unauthenticated') {
     return (
-      <AuthBackdrop>
-        <Logo mark height={56} />
-        <div className="text-center text-cream">
-          <h1 className="text-2xl font-bold">{t('app.adminWelcome')}</h1>
-          <p className="mt-2 text-cream/70">{t('app.title')}</p>
+      <AuthShell>
+        <div className="overflow-hidden rounded-card border border-cream/10 bg-cream text-espresso shadow-warm-lg">
+          <div className="flex flex-col items-center gap-3 bg-espresso px-6 py-8 text-center">
+            <Logo mark height={56} />
+            <p className="text-lg font-bold tracking-wide text-gold font-latin">tito</p>
+            <h1 className="text-xl font-bold text-cream">{t('app.adminWelcome')}</h1>
+            <p className="text-sm text-cream/65">{t('app.loginSubtitle')}</p>
+          </div>
+
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 px-6 py-6">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="admin-email" className="text-sm font-medium text-espresso">
+                {t('app.email')}
+              </label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-ink-70" />
+                <input
+                  id="admin-email"
+                  type="email"
+                  autoComplete="username"
+                  inputMode="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  dir="ltr"
+                  placeholder="admin@tito.app"
+                  className={cn(
+                    'min-h-12 w-full rounded-btn border border-bark/20 bg-white pe-3 ps-10 text-base font-latin',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold',
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="admin-password" className="text-sm font-medium text-espresso">
+                {t('app.password')}
+              </label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-ink-70" />
+                <input
+                  id="admin-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  dir="ltr"
+                  placeholder="••••••••"
+                  className={cn(
+                    'min-h-12 w-full rounded-btn border border-bark/20 bg-white pe-3 ps-10 text-base font-latin',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold',
+                  )}
+                />
+              </div>
+            </div>
+
+            <Button type="submit" variant="primary" size="lg" className="w-full" loading={loading}>
+              {t('app.signIn')}
+            </Button>
+
+            <p className="text-center text-xs text-ink-70">{t('app.adminSecure')}</p>
+          </form>
         </div>
-        <form
-          onSubmit={(e) => void handleSubmit(e)}
-          className="w-full space-y-3 rounded-card bg-cream p-5 text-espresso shadow-warm-lg"
-        >
-          <Input
-            label={t('app.email')}
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            dir="ltr"
-            className="font-latin"
-          />
-          <Input
-            label={t('app.password')}
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            dir="ltr"
-            className="font-latin"
-          />
-          <Button type="submit" variant="primary" size="lg" className="w-full" loading={loading}>
-            {t('app.signIn')}
-          </Button>
-        </form>
-        <p className="text-center text-xs text-cream/40">{t('app.adminSecure')}</p>
-      </AuthBackdrop>
+      </AuthShell>
     );
   }
 

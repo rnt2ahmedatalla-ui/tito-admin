@@ -83,12 +83,22 @@ export function AppShell() {
             );
           })}
         </nav>
-        <div className="border-t border-bark/30 p-4 space-y-2">
-          <Button variant="ghost" size="sm" className="w-full justify-start text-cream/80" onClick={toggleLang}>
+        <div className="space-y-2 border-t border-white/5 p-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-cream/85 hover:bg-bark/30 hover:text-cream"
+            onClick={toggleLang}
+          >
             <Globe className="size-4" />
             {t('app.language')}
           </Button>
-          <Button variant="ghost" size="sm" className="w-full justify-start text-cream/80" onClick={() => void signOut()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-cream/85 hover:bg-bark/30 hover:text-cream"
+            onClick={() => void signOut()}
+          >
             <LogOut className="size-4" />
             {t('app.signOut')}
           </Button>
