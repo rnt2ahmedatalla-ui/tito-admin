@@ -158,8 +158,21 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
 
         {proofUrl ? (
           <div>
-            <p className="text-sm text-ink-70 mb-2">{t('booking.proof')}</p>
+            <p className="mb-2 text-sm text-ink-70">{t('booking.proof')}</p>
             <img src={proofUrl} alt={t('booking.proof')} className="max-h-48 rounded-btn object-contain" loading="lazy" />
+          </div>
+        ) : payment?.status === 'submitted' ? (
+          <div className="rounded-btn bg-sand/50 p-3 text-sm">
+            <p className="font-medium text-espresso">{t('payments.viaWhatsApp')}</p>
+            <p className="mt-1 text-ink-70">{t('payments.checkWhatsAppHint')}</p>
+            {waUrl ? (
+              <a href={waUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex">
+                <Button variant="secondary" size="sm">
+                  <MessageCircle className="size-4" />
+                  {t('payments.openCustomerWhatsApp')}
+                </Button>
+              </a>
+            ) : null}
           </div>
         ) : null}
 

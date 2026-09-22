@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Volume2, VolumeX } from 'lucide-react';
+import { Copy, MessageCircle, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import type { PaymentWithBooking } from '@/types/database';
@@ -13,6 +13,7 @@ import { useSignedProofUrl } from '@/hooks/useSignedProofUrl';
 import { formatEGP } from '@/lib/money';
 import { formatCairoTime, minutesSince, formatWaitTime } from '@/lib/time';
 import { mapError } from '@/lib/errors';
+import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { cn } from '@/lib/cn';
 
 const SOUND_KEY = 'tito-admin-payment-sound';
@@ -32,7 +33,11 @@ function PaymentCard({
 }) {
   const { t, i18n } = useTranslation();
   const cardRef = useRef<HTMLDivElement>(null);
-  const { url: proofUrl, loading: proofLoading } = useSignedProofUrl(payment.proof_path, focused);
+  const viaWhatsApp = (payment.transaction_ref ?? '').toLowerCase() === 'whatsapp' || !payment.proof_path;
+  const { url: proofUrl, loading: proofLoading } = useSignedProofUrl(
+    payment.proof_path,
+    focused && !!payment.proof_path,
+  );
 
   useEffect(() => {
     if (focused && cardRef.current) {
@@ -41,7 +46,21 @@ function PaymentCard({
   }, [focused]);
 
   const name = payment.profile?.full_name ?? '—';
+  const phone = payment.profile?.phone ?? '';
   const waitMins = minutesSince(payment.created_at);
+  const shortId = payment.booking_id.slice(0, 8).toUpperCase();
+  const when = payment.booking
+    ? formatCairoTime(payment.booking.start_at, i18n.language)
+    : '';
+
+  const waCheckUrl = phone
+    ? buildWhatsAppUrl(
+        phone,
+        i18n.language === 'ar'
+          ? `أهلاً ${name}، وصّلنا إنك حوّلت ${formatEGP(payment.amount_egp)} للحجز #${shortId}${when ? ` (${when})` : ''}. ابعت صورة التحويل هنا لو لسه مبعتتهاش 🙏`
+          : `Hi ${name}, we got your transfer note for ${formatEGP(payment.amount_egp)} booking #${shortId}${when ? ` (${when})` : ''}. Please send the screenshot here if you haven’t 🙏`,
+      )
+    : null;
 
   return (
     <div
@@ -61,13 +80,25 @@ function PaymentCard({
             <img
               src={proofUrl}
               alt={t('booking.proof')}
-              className="max-h-64 w-full rounded-btn object-contain bg-sand/30 cursor-zoom-in"
+              className="max-h-64 w-full cursor-zoom-in rounded-btn bg-sand/30 object-contain"
               loading="lazy"
               onClick={() => window.open(proofUrl, '_blank', 'noopener,noreferrer')}
             />
           ) : (
-            <div className="h-32 rounded-btn bg-sand/30 flex items-center justify-center text-ink-70 text-sm">
-              —
+            <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-btn bg-sand/40 px-4 text-center">
+              <MessageCircle className="size-8 text-gold" />
+              <p className="text-sm font-medium text-espresso">{t('payments.viaWhatsApp')}</p>
+              <p className="text-xs text-ink-70">{t('payments.checkWhatsAppHint')}</p>
+              {waCheckUrl ? (
+                <a href={waCheckUrl} target="_blank" rel="noopener noreferrer">
+                  <Button variant="primary" size="sm">
+                    <MessageCircle className="size-4" />
+                    {t('payments.openCustomerWhatsApp')}
+                  </Button>
+                </a>
+              ) : (
+                <p className="text-xs text-danger">{t('reminders.noPhone')}</p>
+              )}
             </div>
           )}
         </div>
@@ -76,16 +107,34 @@ function PaymentCard({
           <p className="text-sm text-ink-70">
             {t('payments.waiting')} {formatWaitTime(waitMins, t)}
           </p>
-          <p className="font-semibold text-lg">{name}</p>
-          <p className="text-sm font-latin">{payment.profile?.phone}</p>
+          {viaWhatsApp ? (
+            <span className="inline-flex rounded-pill bg-gold/20 px-3 py-1 text-xs font-semibold text-bark">
+              WhatsApp
+            </span>
+          ) : null}
+          <p className="text-lg font-semibold">{name}</p>
+          <p className="text-sm font-latin" dir="ltr">
+            {phone || '—'}
+          </p>
+          <p className="text-xs font-latin text-ink-70">#{shortId}</p>
           {payment.booking ? (
             <p className="text-sm text-ink-70 font-latin">
-              {formatCairoTime(payment.booking.start_at, i18n.language)}
+              {formatCairoTime(payment.booking.start_at, i18n.language)} ·{' '}
+              {i18n.language === 'ar'
+                ? payment.booking.service_name_ar
+                : payment.booking.service_name_en}
             </p>
           ) : null}
-          {payment.transaction_ref ? (
+          {payment.method ? (
+            <p className="text-sm text-ink-70">
+              {payment.method === 'instapay' ? 'InstaPay' : payment.method === 'vodafone_cash' ? 'Vodafone Cash' : payment.method}
+            </p>
+          ) : null}
+          {payment.transaction_ref && payment.transaction_ref !== 'whatsapp' ? (
             <div className="flex items-center gap-2">
-              <code className="text-sm font-latin bg-sand/50 px-2 py-1 rounded">{payment.transaction_ref}</code>
+              <code className="rounded bg-sand/50 px-2 py-1 text-sm font-latin">
+                {payment.transaction_ref}
+              </code>
               <Button
                 variant="ghost"
                 size="sm"
@@ -99,7 +148,12 @@ function PaymentCard({
             </div>
           ) : null}
           <div className="flex gap-2 pt-2">
-            <Button variant="primary" size="lg" className="flex-1 bg-success hover:bg-success/90" onClick={onConfirm}>
+            <Button
+              variant="primary"
+              size="lg"
+              className="flex-1 bg-success hover:bg-success/90"
+              onClick={onConfirm}
+            >
               {t('payments.confirm')}
             </Button>
             <Button variant="danger" size="lg" className="flex-1" onClick={onReject}>
@@ -170,6 +224,7 @@ export function PaymentsPage() {
       toast.success(t('payments.confirm'));
       void queryClient.invalidateQueries({ queryKey: ['payments'] });
       void queryClient.invalidateQueries({ queryKey: ['payments-count'] });
+      void queryClient.invalidateQueries({ queryKey: ['bookings'] });
       setConfirmId(null);
     },
     onError: (e) => toast.error(mapError(e, t)),
@@ -221,8 +276,12 @@ export function PaymentsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t('payments.title')}</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-default pb-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold font-latin">WhatsApp</p>
+          <h1 className="mt-1 text-2xl font-bold text-espresso">{t('payments.title')}</h1>
+          <p className="mt-1 max-w-xl text-sm text-ink-70">{t('payments.whatsappQueueHint')}</p>
+        </div>
         <Button variant="ghost" size="sm" onClick={toggleSound} aria-label={t('payments.soundToggle')}>
           {soundOn ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
         </Button>
@@ -234,19 +293,18 @@ export function PaymentsPage() {
           <Skeleton className="h-48" />
         </div>
       ) : payments.length === 0 ? (
-        <p className="text-center text-ink-70 py-12">{t('payments.empty')}</p>
+        <p className="py-12 text-center text-ink-70">{t('payments.empty')}</p>
       ) : (
         <div className="space-y-4">
           {payments.map((p, i) => (
-            <div key={p.id}>
-              <PaymentCard
-                payment={p}
-                focused={i === focusedIndex}
-                onFocus={() => setFocusedIndex(i)}
-                onConfirm={() => setConfirmId(p.id)}
-                onReject={() => setRejectId(p.id)}
-              />
-            </div>
+            <PaymentCard
+              key={p.id}
+              payment={p}
+              focused={i === focusedIndex}
+              onFocus={() => setFocusedIndex(i)}
+              onConfirm={() => setConfirmId(p.id)}
+              onReject={() => setRejectId(p.id)}
+            />
           ))}
         </div>
       )}
@@ -271,19 +329,23 @@ export function PaymentsPage() {
               onChange={(e) => setRejectReason(e.target.value)}
             />
             <div className="mt-2 flex flex-wrap gap-2">
-              {['مبلغ غلط', 'إثبات مش واضح', 'تحويل مكرر'].map((r) => (
+              {['مبلغ غلط', 'صورة مش واضحة على واتساب', 'تحويل مكرر', 'مفيش صورة'].map((r) => (
                 <Button key={r} variant="ghost" size="sm" onClick={() => setRejectReason(r)}>
                   {r}
                 </Button>
               ))}
             </div>
-            <div className="mt-4 flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setRejectId(null)}>{t('app.cancel')}</Button>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setRejectId(null)}>
+                {t('app.cancel')}
+              </Button>
               <Button
                 variant="danger"
                 loading={rejectMutation.isPending}
                 disabled={!rejectReason.trim()}
-                onClick={() => rejectId && void rejectMutation.mutate({ id: rejectId, reason: rejectReason })}
+                onClick={() =>
+                  rejectId && void rejectMutation.mutate({ id: rejectId, reason: rejectReason })
+                }
               >
                 {t('payments.reject')}
               </Button>

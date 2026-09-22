@@ -65,13 +65,17 @@
   "payments": {
     "title": "Payments",
     "empty": "No payments waiting",
-    "confirm": "Confirm",
+    "confirm": "Confirm transfer",
     "reject": "Reject",
     "rejectReason": "Rejection reason",
     "waiting": "Waiting for",
     "soundToggle": "Alert sound",
-    "confirmPayment": "Confirm payment?",
-    "rejectPayment": "Reject payment?"
+    "confirmPayment": "Confirm the WhatsApp transfer?",
+    "rejectPayment": "Reject payment?",
+    "viaWhatsApp": "Proof on WhatsApp",
+    "checkWhatsAppHint": "Open the customer chat, check the transfer screenshot, then confirm or reject.",
+    "openCustomerWhatsApp": "Open customer WhatsApp",
+    "whatsappQueueHint": "Customers send transfer screenshots on WhatsApp. Open the chat, verify, then confirm or reject here."
   },
   "reminders": {
     "title": "Reminders",

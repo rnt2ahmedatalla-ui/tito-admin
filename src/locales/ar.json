@@ -65,13 +65,17 @@
   "payments": {
     "title": "الدفعات",
     "empty": "لا توجد دفعات في الانتظار",
-    "confirm": "تأكيد",
+    "confirm": "تأكيد التحويل",
     "reject": "رفض",
     "rejectReason": "سبب الرفض",
     "waiting": "في الانتظار منذ",
     "soundToggle": "صوت التنبيه",
-    "confirmPayment": "تأكيد الدفع؟",
-    "rejectPayment": "رفض الدفع؟"
+    "confirmPayment": "أكدت التحويل على واتساب؟",
+    "rejectPayment": "رفض الدفع؟",
+    "viaWhatsApp": "الإثبات على واتساب",
+    "checkWhatsAppHint": "افتح شات العميل واتأكد من صورة التحويل، بعدين أكّد أو ارفض.",
+    "openCustomerWhatsApp": "فتح واتساب العميل",
+    "whatsappQueueHint": "العميل بيبعت صورة التحويل على واتساب. افتح الشات، اتشيك، وبعدين أكّد أو ارفض من هنا."
   },
   "reminders": {
     "title": "التذكيرات",
