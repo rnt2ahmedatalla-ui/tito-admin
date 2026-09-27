@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useSignedProofUrl } from '@/hooks/useSignedProofUrl';
 import { formatEGP } from '@/lib/money';
-import { formatCairoTime, formatCairoDateShort } from '@/lib/time';
+import { formatCairoTime, formatCairoDateShort, cairoDateString } from '@/lib/time';
 import { mapError } from '@/lib/errors';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +31,11 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const [moveDate, setMoveDate] = useState('');
+  const [moveSlots, setMoveSlots] = useState<string[]>([]);
+  const [moveSlot, setMoveSlot] = useState('');
+  const [offerFor, setOfferFor] = useState<string | null>(null);
+  const [localOffer, setLocalOffer] = useState<string | null>(null);
 
   const payment = booking ? normalizeBooking(booking).payment : null;
   const { url: proofUrl } = useSignedProofUrl(payment?.proof_path, open && !!payment?.proof_path);
@@ -105,6 +110,74 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
     onError: (e) => toast.error(mapError(e, t)),
   });
 
+  const proposeMove = useMutation({
+    mutationFn: async ({ id, start }: { id: string; start: string }) => {
+      const { data, error } = await supabase.rpc('admin_propose_booking_move', {
+        p_booking_id: id,
+        p_start_at: start,
+      });
+      if (error) throw error;
+      const token = (data as { token?: string } | null)?.token;
+      if (!token) throw new Error('NOT_FOUND');
+      return { token, start };
+    },
+    onSuccess: ({ token, start }) => {
+      if (!booking) return;
+      const row = normalizeBooking(booking);
+      const phone = row.profile?.phone ?? '';
+      const locale = i18n.language === 'ar' ? 'ar' : 'en';
+      const when = `${formatCairoDateShort(start)} ${formatCairoTime(start, locale)}`;
+      const url = `https://tito-customer.vercel.app/move/${token}`;
+      const message =
+        locale === 'ar'
+          ? `أهلاً ${row.profile?.full_name ?? ''} 🙏\nآسف، مش هقدر أخلّصلك الحجز في المعاد اللي حجزته — مشغول في الوقت ده.\nأقدر أنقلك للمعاد ده:\n${when}\nمعادك القديم لسه ثابت. عشان أنقلك، افتح اللينك ووافق:\n${url}`
+          : `Hi ${row.profile?.full_name ?? ''} 🙏\nSorry — I can't do your booking at the time you reserved. I'm busy then.\nI can move you to:\n${when}\nYour current time stays until you accept. Open the link and confirm:\n${url}`;
+      const wa = phone ? buildWhatsAppUrl(phone, message) : null;
+      setOfferFor(row.id);
+      setLocalOffer(start);
+      setConfirmAction(null);
+      invalidate();
+      if (!wa) {
+        toast.error(t('booking.noPhone'));
+        return;
+      }
+      window.open(wa, '_blank', 'noopener,noreferrer');
+      toast.success(t('booking.moveSent'));
+    },
+    onError: (e) => toast.error(mapError(e, t)),
+  });
+
+  const cancelMove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('admin_cancel_booking_move', { p_booking_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setLocalOffer(null);
+      setOfferFor(booking?.id ?? null);
+      toast.success(t('booking.moveCancelled'));
+      invalidate();
+    },
+    onError: (e) => toast.error(mapError(e, t)),
+  });
+
+  const loadMoveSlots = async (serviceId: string) => {
+    if (!moveDate || !serviceId) return;
+    const { data, error } = await supabase.rpc('get_available_slots', {
+      p_date: moveDate,
+      p_service_id: serviceId,
+    });
+    if (error) {
+      toast.error(mapError(error, t));
+      return;
+    }
+    const list = (data as Array<{ start_at: string }> | null) ?? [];
+    const starts = list.map((row) => row.start_at).filter(Boolean);
+    setMoveSlots(starts);
+    setMoveSlot('');
+    if (starts.length === 0) toast.message(t('booking.moveNoSlots'));
+  };
+
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'completed' | 'no_show' }) => {
       const { error } = await supabase.rpc('admin_set_booking_status', {
@@ -127,6 +200,8 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
   const phone = b.profile?.phone ?? '';
   const waUrl = phone ? buildWhatsAppUrl(phone, '') : null;
   const locale = i18n.language;
+  const offeredAt =
+    offerFor === b.id ? localOffer : b.move_status === 'pending' ? b.move_start_at : null;
 
   return (
     <Sheet open={open} onClose={onClose} title={t('booking.detail')}>
@@ -208,6 +283,25 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
           </div>
         ) : null}
 
+        {offeredAt ? (
+          <div className="rounded-btn bg-sand/50 p-3 text-sm">
+            <p className="font-medium text-espresso">
+              {t('booking.movePending', {
+                time: `${formatCairoDateShort(offeredAt)} ${formatCairoTime(offeredAt, locale)}`,
+              })}
+            </p>
+            <Button
+              className="mt-2"
+              variant="ghost"
+              size="sm"
+              loading={cancelMove.isPending}
+              onClick={() => void cancelMove.mutate(b.id)}
+            >
+              {t('booking.moveCancel')}
+            </Button>
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-2 pt-2">
           {payment?.status === 'submitted' ? (
             <>
@@ -225,9 +319,20 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
             </>
           ) : null}
           {b.status !== 'cancelled' && b.status !== 'completed' ? (
-            <Button variant="secondary" onClick={() => setConfirmAction('cancel')}>
-              {t('booking.cancel')}
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setMoveDate((d) => d || cairoDateString(new Date()));
+                  setConfirmAction('move');
+                }}
+              >
+                {t('booking.move')}
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmAction('cancel')}>
+                {t('booking.cancel')}
+              </Button>
+            </>
           ) : null}
           {b.status === 'confirmed' ? (
             <>
@@ -270,6 +375,52 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
                 onClick={() => payment && void rejectPayment.mutate({ id: payment.id, reason: rejectReason })}
               >
                 {t('payments.reject')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmAction === 'move' ? (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center p-4 lg:items-center">
+          <div className="absolute inset-0 bg-espresso/50" onClick={() => setConfirmAction(null)} />
+          <div className="relative w-full max-w-md rounded-card bg-white p-4">
+            <p className="mb-2 text-sm text-ink-70">{t('booking.moveHint')}</p>
+            <Input
+              label={t('booking.moveDate')}
+              type="date"
+              value={moveDate}
+              onChange={(e) => setMoveDate(e.target.value)}
+            />
+            <Button className="mt-3" variant="secondary" onClick={() => void loadMoveSlots(b.service_id)}>
+              {t('booking.moveLoad')}
+            </Button>
+            {moveSlots.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {moveSlots.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => setMoveSlot(slot)}
+                    className={`rounded-btn border px-3 py-2 text-sm font-latin ${
+                      moveSlot === slot ? 'border-gold bg-gold/10' : 'border-bark/20'
+                    }`}
+                  >
+                    {formatCairoTime(slot, locale)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button variant="ghost" onClick={() => setConfirmAction(null)}>{t('app.cancel')}</Button>
+              <Button
+                variant="primary"
+                loading={proposeMove.isPending}
+                disabled={!moveSlot}
+                onClick={() => void proposeMove.mutate({ id: b.id, start: moveSlot })}
+              >
+                <MessageCircle className="size-4" />
+                {t('booking.moveSend')}
               </Button>
             </div>
           </div>

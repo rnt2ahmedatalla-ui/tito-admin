@@ -66,6 +66,11 @@ export interface Database {
           reviewed_by: string | null;
           reviewed_at: string | null;
           notes: string | null;
+          move_start_at: string | null;
+          move_end_at: string | null;
+          move_token: string | null;
+          move_status: string | null;
+          move_requested_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -297,6 +302,14 @@ export interface Database {
       };
       admin_cancel_booking: {
         Args: { p_booking_id: string; p_reason: string };
+        Returns: Json;
+      };
+      admin_propose_booking_move: {
+        Args: { p_booking_id: string; p_start_at: string };
+        Returns: Json;
+      };
+      admin_cancel_booking_move: {
+        Args: { p_booking_id: string };
         Returns: Json;
       };
       admin_set_booking_status: {
