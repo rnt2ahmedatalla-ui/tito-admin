@@ -61,7 +61,9 @@ export function TodayPage() {
     staleTime: 15_000,
   });
 
-  const bookings = bookingsQuery.data ?? [];
+  const bookings = (bookingsQuery.data ?? []).filter(
+    (b) => b.status !== 'cancelled' && b.status !== 'expired',
+  );
   const stats = statsQuery.data;
 
   const hours = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 8), []);

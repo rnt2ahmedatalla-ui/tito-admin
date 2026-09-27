@@ -23,6 +23,8 @@ interface BookingDetailPanelProps {
   onClose: () => void;
 }
 
+const REBOOK_URL = 'https://tito-customer.vercel.app/book';
+
 export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPanelProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -38,6 +40,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
     void queryClient.invalidateQueries({ queryKey: ['payments'] });
     void queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     void queryClient.invalidateQueries({ queryKey: ['payments-count'] });
+    void queryClient.invalidateQueries({ queryKey: ['reminders'] });
   };
 
   const confirmPayment = useMutation({
@@ -70,16 +73,33 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
   });
 
   const cancelBooking = useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+    mutationFn: async ({ id, reason, notify }: { id: string; reason: string; notify: boolean }) => {
       const { error } = await supabase.rpc('admin_cancel_booking', {
         p_booking_id: id,
-        p_reason: reason,
+        p_reason: reason.trim() || 'cancelled by admin',
       });
       if (error) throw error;
+      return notify;
     },
-    onSuccess: () => {
+    onSuccess: (notify) => {
       toast.success(t('booking.cancel'));
       invalidate();
+      if (notify && booking) {
+        const b = normalizeBooking(booking);
+        const phone = b.profile?.phone ?? '';
+        const locale = i18n.language === 'ar' ? 'ar' : 'en';
+        const message =
+          locale === 'ar'
+            ? `أهلاً ${b.profile?.full_name ?? ''} 🙏\nنعتذر، اضطرينا نلغي حجزك يوم ${formatCairoDateShort(b.start_at)} الساعة ${formatCairoTime(b.start_at, locale)}.\nتحجز معاد جديد من هنا:\n${REBOOK_URL}`
+            : `Hi ${b.profile?.full_name ?? ''} 🙏\nSorry — we had to cancel your booking on ${formatCairoDateShort(b.start_at)} at ${formatCairoTime(b.start_at, locale)}.\nBook a new time here:\n${REBOOK_URL}`;
+        const url = phone ? buildWhatsAppUrl(phone, message) : null;
+        if (!url) {
+          toast.error(t('booking.noPhone'));
+        } else {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          toast.success(t('booking.rescheduleSent'));
+        }
+      }
       onClose();
     },
     onError: (e) => toast.error(mapError(e, t)),
@@ -266,20 +286,28 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
                 time: formatCairoTime(b.start_at, locale),
               })}
             </p>
+            <p className="mb-2 text-sm text-ink-70">{t('booking.rescheduleHint')}</p>
             <Input
               label={t('booking.cancelReason')}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
             />
-            <div className="mt-4 flex gap-2 justify-end">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button variant="ghost" onClick={() => setConfirmAction(null)}>{t('app.cancel')}</Button>
+              <Button
+                variant="secondary"
+                loading={cancelBooking.isPending}
+                onClick={() => void cancelBooking.mutate({ id: b.id, reason: cancelReason, notify: false })}
+              >
+                {t('booking.cancelOnly')}
+              </Button>
               <Button
                 variant="danger"
                 loading={cancelBooking.isPending}
-                disabled={!cancelReason.trim()}
-                onClick={() => void cancelBooking.mutate({ id: b.id, reason: cancelReason })}
+                onClick={() => void cancelBooking.mutate({ id: b.id, reason: cancelReason, notify: true })}
               >
-                {t('booking.cancel')}
+                <MessageCircle className="size-4" />
+                {t('booking.cancelAndWhatsApp')}
               </Button>
             </div>
           </div>
