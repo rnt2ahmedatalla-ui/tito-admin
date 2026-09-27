@@ -104,6 +104,39 @@ export interface Database {
           { foreignKeyName: 'payments_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ];
       };
+      booking_extras: {
+        Row: {
+          id: string;
+          booking_id: string;
+          service_id: string | null;
+          name_ar: string;
+          name_en: string;
+          price_egp: number;
+          created_at: string;
+        };
+        Insert: {
+          booking_id: string;
+          name_ar: string;
+          name_en: string;
+          price_egp: number;
+          service_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          name_ar?: string;
+          name_en?: string;
+          price_egp?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'booking_extras_booking_id_fkey';
+            columns: ['booking_id'];
+            isOneToOne: false;
+            referencedRelation: 'bookings';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       services: {
         Row: {
           id: string;
@@ -113,6 +146,7 @@ export interface Database {
           duration_minutes: number;
           sort_order: number;
           is_active: boolean;
+          is_extra: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -124,6 +158,7 @@ export interface Database {
           duration_minutes: number;
           sort_order?: number;
           is_active?: boolean;
+          is_extra?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -135,6 +170,7 @@ export interface Database {
           duration_minutes?: number;
           sort_order?: number;
           is_active?: boolean;
+          is_extra?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -364,9 +400,17 @@ export type WorkingHours = Database['public']['Tables']['working_hours']['Row'];
 export type TimeOff = Database['public']['Tables']['time_off']['Row'];
 export type Settings = Database['public']['Tables']['settings']['Row'];
 
+export type BookingExtra = {
+  id: string;
+  name_ar: string;
+  name_en: string;
+  price_egp: number;
+};
+
 export type BookingWithRelations = Booking & {
   profile?: Pick<Profile, 'full_name' | 'phone'> | Pick<Profile, 'full_name' | 'phone'>[] | null;
   payment?: Payment | Payment[] | null;
+  extras?: BookingExtra[] | null;
 };
 
 export type PaymentWithBooking = Payment & {

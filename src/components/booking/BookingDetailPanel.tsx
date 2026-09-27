@@ -238,6 +238,15 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
           <div>
             <p className="text-sm text-ink-70">{t('booking.service')}</p>
             <p className="font-medium">{locale === 'ar' ? b.service_name_ar : b.service_name_en}</p>
+            {b.extras?.length ? (
+              <ul className="mt-1 space-y-0.5 text-sm text-ink-70">
+                {b.extras.map((extra) => (
+                  <li key={extra.id}>
+                    + {locale === 'ar' ? extra.name_ar : extra.name_en} · {formatEGP(extra.price_egp)}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
           <div>
             <p className="text-sm text-ink-70">{t('booking.price')}</p>

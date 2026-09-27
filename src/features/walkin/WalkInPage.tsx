@@ -25,7 +25,7 @@ export function WalkInPage() {
   const { data: services = [] } = useQuery({
     queryKey: ['services'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('services').select('*').eq('is_active', true);
+      const { data, error } = await supabase.from('services').select('*').eq('is_active', true).eq('is_extra', false);
       if (error) throw error;
       return data as Service[];
     },

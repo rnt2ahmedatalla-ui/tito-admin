@@ -162,7 +162,12 @@
     "duration": "Duration (min)",
     "active": "Active",
     "hidden": "Hidden",
-    "priceWarning": "This change won't affect past bookings"
+    "priceWarning": "This change won't affect past bookings",
+    "extrasTitle": "Add-ons",
+    "addExtra": "Add a small extra",
+    "extraHint": "No time — added on top of the order, like a mask",
+    "extrasEmpty": "No extras yet. Add a mask or another small service.",
+    "noTime": "No time"
   },
   "hours": {
     "title": "Working hours",

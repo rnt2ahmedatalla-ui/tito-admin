@@ -48,7 +48,7 @@ export function BookingsPage() {
       let query = supabase
         .from('bookings')
         .select(
-          '*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*)',
+          '*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*), extras:booking_extras(id, name_ar, name_en, price_egp)',
           { count: 'exact' },
         )
         .order('start_at', { ascending: false })
