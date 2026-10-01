@@ -10,6 +10,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
+import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import { CountBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
@@ -31,6 +32,8 @@ const sidebarLinks = [
   { to: '/more/services', labelKey: 'nav.services' },
   { to: '/more/hours', labelKey: 'nav.hours' },
   { to: '/more/time-off', labelKey: 'nav.timeOff' },
+  { to: '/more/breaks', labelKey: 'nav.breaks' },
+  { to: '/more/products', labelKey: 'nav.products' },
   { to: '/more/customers', labelKey: 'nav.customers' },
   { to: '/more/walk-in', labelKey: 'nav.walkIn' },
   { to: '/more/settings', labelKey: 'nav.settings' },
@@ -109,6 +112,9 @@ export function AppShell() {
           })}
         </nav>
         <div className="space-y-2 border-t border-white/10 p-4">
+          <div className="flex justify-end px-1">
+            <NotificationsBell />
+          </div>
           <SidebarAction
             icon={Globe}
             label={i18n.language?.startsWith('ar') ? 'English' : 'عربي'}
@@ -125,6 +131,7 @@ export function AppShell() {
             <span className="text-sm font-semibold text-gold font-latin">tito</span>
           </div>
           <div className="flex items-center gap-1">
+            <NotificationsBell />
             <CountBadge count={paymentsCount} />
             <button
               type="button"

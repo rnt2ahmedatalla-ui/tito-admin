@@ -104,6 +104,93 @@ export interface Database {
           { foreignKeyName: 'payments_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ];
       };
+      products: {
+        Row: {
+          id: string;
+          name_ar: string;
+          name_en: string;
+          description_ar: string | null;
+          description_en: string | null;
+          price_egp: number;
+          image_path: string | null;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          name_ar: string;
+          name_en: string;
+          price_egp: number;
+          description_ar?: string | null;
+          description_en?: string | null;
+          image_path?: string | null;
+          is_active?: boolean;
+          sort_order?: number;
+        };
+        Update: {
+          name_ar?: string;
+          name_en?: string;
+          price_egp?: number;
+          is_active?: boolean;
+          image_path?: string | null;
+        };
+        Relationships: [];
+      };
+      product_orders: {
+        Row: {
+          id: string;
+          user_id: string;
+          product_id: string | null;
+          product_name_ar: string;
+          product_name_en: string;
+          price_egp: number;
+          status: string;
+          method: string | null;
+          created_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      recurring_breaks: {
+        Row: {
+          id: string;
+          reason: string;
+          start_time: string;
+          end_time: string;
+          days_of_week: number[];
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          reason?: string;
+          start_time: string;
+          end_time: string;
+          days_of_week?: number[];
+          is_active?: boolean;
+        };
+        Update: {
+          reason?: string;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+      admin_notifications: {
+        Row: {
+          id: string;
+          kind: string;
+          title_ar: string;
+          title_en: string;
+          body_ar: string | null;
+          body_en: string | null;
+          is_read: boolean;
+          created_at: string;
+        };
+        Insert: never;
+        Update: { is_read?: boolean };
+        Relationships: [];
+      };
       booking_extras: {
         Row: {
           id: string;
@@ -253,6 +340,15 @@ export interface Database {
           payment_note_en: string | null;
           shop_name: string;
           shop_whatsapp: string | null;
+          shop_location_url: string | null;
+          hero_headline_ar: string | null;
+          hero_headline_en: string | null;
+          hero_support_ar: string | null;
+          hero_support_en: string | null;
+          about_ar: string | null;
+          about_en: string | null;
+          tagline_ar: string | null;
+          tagline_en: string | null;
           timezone: string;
           reminder_template_ar: string;
           reminder_template_en: string;
@@ -282,6 +378,15 @@ export interface Database {
           payment_note_en?: string | null;
           shop_name?: string;
           shop_whatsapp?: string | null;
+          shop_location_url?: string | null;
+          hero_headline_ar?: string | null;
+          hero_headline_en?: string | null;
+          hero_support_ar?: string | null;
+          hero_support_en?: string | null;
+          about_ar?: string | null;
+          about_en?: string | null;
+          tagline_ar?: string | null;
+          tagline_en?: string | null;
           reminder_template_ar?: string;
           reminder_template_en?: string;
           confirmation_template_ar?: string;
@@ -346,6 +451,14 @@ export interface Database {
       };
       admin_cancel_booking_move: {
         Args: { p_booking_id: string };
+        Returns: Json;
+      };
+      admin_mark_notifications_read: {
+        Args: { p_ids?: string[] | null };
+        Returns: Json;
+      };
+      admin_set_product_order_status: {
+        Args: { p_order_id: string; p_status: string; p_reason?: string | null };
         Returns: Json;
       };
       admin_set_booking_status: {

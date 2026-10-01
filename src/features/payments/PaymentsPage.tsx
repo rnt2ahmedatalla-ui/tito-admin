@@ -283,6 +283,7 @@ export function PaymentsPage() {
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold font-latin">WhatsApp</p>
           <h1 className="mt-1 text-2xl font-bold text-espresso">{t('payments.title')}</h1>
           <p className="mt-1 max-w-xl text-sm text-ink-70">{t('payments.whatsappQueueHint')}</p>
+          <p className="mt-1 max-w-xl text-sm text-ink-70">{t('booking.slotHeld')}</p>
         </div>
         <Button variant="ghost" size="sm" onClick={toggleSound} aria-label={t('payments.soundToggle')}>
           {soundOn ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}

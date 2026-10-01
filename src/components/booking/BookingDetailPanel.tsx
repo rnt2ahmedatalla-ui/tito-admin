@@ -447,6 +447,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
               })}
             </p>
             <p className="mb-2 text-sm text-ink-70">{t('booking.rescheduleHint')}</p>
+            <p className="mb-2 text-sm text-ink-70">{t('booking.waSendHint')}</p>
             <Input
               label={t('booking.cancelReason')}
               value={cancelReason}

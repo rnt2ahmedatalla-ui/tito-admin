@@ -30,6 +30,7 @@ const settingsSchema = z.object({
   payment_note_en: z.string().nullable(),
   shop_name: z.string().min(1),
   shop_whatsapp: z.string().nullable(),
+  shop_location_url: z.string().nullable(),
   reminder_template_ar: z.string(),
   reminder_template_en: z.string(),
   confirmation_template_ar: z.string(),
@@ -37,6 +38,14 @@ const settingsSchema = z.object({
   cancellation_template_ar: z.string(),
   cancellation_template_en: z.string(),
   booking_open: z.boolean(),
+  hero_headline_ar: z.string().max(80).nullable(),
+  hero_headline_en: z.string().max(80).nullable(),
+  hero_support_ar: z.string().max(200).nullable(),
+  hero_support_en: z.string().max(200).nullable(),
+  about_ar: z.string().max(600).nullable(),
+  about_en: z.string().max(600).nullable(),
+  tagline_ar: z.string().max(100).nullable(),
+  tagline_en: z.string().max(100).nullable(),
 });
 
 type WaSecrets = {
@@ -124,9 +133,11 @@ export function SettingsPage() {
     setDirty(true);
   };
 
-  const saveSection = () => {
-    const parsed = settingsSchema.partial().safeParse(form);
+  const saveSection = (override: Partial<Settings> = {}) => {
+    const merged = { ...form, ...override };
+    const parsed = settingsSchema.partial().safeParse(merged);
     if (!parsed.success) return;
+    setForm(merged);
     void saveMutation.mutate(parsed.data);
   };
 
@@ -153,7 +164,10 @@ export function SettingsPage() {
               checked={form.booking_open ?? true}
               onChange={(e) => {
                 if (!e.target.checked) setConfirmClose(true);
-                else update({ booking_open: true });
+                else {
+                  update({ booking_open: true });
+                  saveSection({ booking_open: true });
+                }
               }}
               className="size-6 accent-gold"
             />
@@ -221,7 +235,7 @@ export function SettingsPage() {
           />
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>
+            <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>
               {t('app.save')}
             </Button>
             <Button
@@ -248,7 +262,7 @@ export function SettingsPage() {
             <input type="checkbox" checked={form.auto_complete ?? false} onChange={(e) => update({ auto_complete: e.target.checked })} />
             {t('settings.autoComplete')}
           </label>
-          <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
+          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>
 
@@ -260,10 +274,11 @@ export function SettingsPage() {
             {t('settings.allowPayAtShop')}
           </label>
           <Input label={t('settings.instapay')} value={form.instapay_number ?? ''} onChange={(e) => update({ instapay_number: e.target.value })} />
+          <p className="text-xs text-ink-70">{t('settings.payLinkHint')}</p>
           <Input label={t('settings.vodafone')} value={form.vodafone_cash_number ?? ''} onChange={(e) => update({ vodafone_cash_number: e.target.value })} />
           <Input label={t('settings.paymentNoteAr')} value={form.payment_note_ar ?? ''} onChange={(e) => update({ payment_note_ar: e.target.value })} />
           <Input label={t('settings.paymentNoteEn')} value={form.payment_note_en ?? ''} onChange={(e) => update({ payment_note_en: e.target.value })} />
-          <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
+          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>
 
@@ -272,8 +287,39 @@ export function SettingsPage() {
         <CardBody className="grid gap-3">
           <Input label={t('settings.shopName')} value={form.shop_name ?? ''} onChange={(e) => update({ shop_name: e.target.value })} />
           <Input label={t('settings.shopWhatsapp')} value={form.shop_whatsapp ?? ''} onChange={(e) => update({ shop_whatsapp: e.target.value })} />
+          <Input label={t('settings.shopLocation')} value={form.shop_location_url ?? ''} onChange={(e) => update({ shop_location_url: e.target.value })} />
           <Input label={t('settings.timezone')} value="Africa/Cairo" readOnly disabled />
-          <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
+          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-semibold">{t('settings.customerUi')}</h2>
+          <p className="text-sm text-ink-70">{t('settings.customerUiHint')}</p>
+        </CardHeader>
+        <CardBody className="grid gap-3">
+          <Input label={t('settings.taglineAr')} value={form.tagline_ar ?? ''} maxLength={100} onChange={(e) => update({ tagline_ar: e.target.value })} />
+          <Input label={t('settings.taglineEn')} value={form.tagline_en ?? ''} maxLength={100} onChange={(e) => update({ tagline_en: e.target.value })} />
+          <Input label={t('settings.heroHeadlineAr')} value={form.hero_headline_ar ?? ''} maxLength={80} onChange={(e) => update({ hero_headline_ar: e.target.value })} />
+          <Input label={t('settings.heroHeadlineEn')} value={form.hero_headline_en ?? ''} maxLength={80} onChange={(e) => update({ hero_headline_en: e.target.value })} />
+          <Input label={t('settings.heroSupportAr')} value={form.hero_support_ar ?? ''} maxLength={200} onChange={(e) => update({ hero_support_ar: e.target.value })} />
+          <Input label={t('settings.heroSupportEn')} value={form.hero_support_en ?? ''} maxLength={200} onChange={(e) => update({ hero_support_en: e.target.value })} />
+          <label className="text-sm font-medium text-ink-70">{t('settings.aboutAr')}</label>
+          <textarea
+            className="min-h-24 w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base"
+            maxLength={600}
+            value={form.about_ar ?? ''}
+            onChange={(e) => update({ about_ar: e.target.value })}
+          />
+          <label className="text-sm font-medium text-ink-70">{t('settings.aboutEn')}</label>
+          <textarea
+            className="min-h-24 w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base"
+            maxLength={600}
+            value={form.about_en ?? ''}
+            onChange={(e) => update({ about_en: e.target.value })}
+          />
+          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>
 
@@ -289,7 +335,7 @@ export function SettingsPage() {
           <Input label={t('settings.confirmEn')} value={form.confirmation_template_en ?? ''} onChange={(e) => update({ confirmation_template_en: e.target.value })} />
           <Input label={t('settings.cancelAr')} value={form.cancellation_template_ar ?? ''} onChange={(e) => update({ cancellation_template_ar: e.target.value })} />
           <Input label={t('settings.cancelEn')} value={form.cancellation_template_en ?? ''} onChange={(e) => update({ cancellation_template_en: e.target.value })} />
-          <Button variant="primary" onClick={saveSection} loading={saveMutation.isPending}>{t('app.save')}</Button>
+          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>
 
@@ -299,9 +345,8 @@ export function SettingsPage() {
         message={t('settings.bookingOpenOff')}
         loading={saveMutation.isPending}
         onConfirm={() => {
-          update({ booking_open: false });
           setConfirmClose(false);
-          saveSection();
+          saveSection({ booking_open: false });
         }}
         onCancel={() => setConfirmClose(false)}
       />

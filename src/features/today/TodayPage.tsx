@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from 'date-fns';
 import { supabase } from '@/lib/supabase';
-import type { BookingWithRelations, DashboardStats } from '@/types/database';
+import type { BookingWithRelations, DashboardStats, WorkingHours } from '@/types/database';
 import { Card, CardBody } from '@/components/ui/Card';
 import { KpiSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -61,12 +61,31 @@ export function TodayPage() {
     staleTime: 15_000,
   });
 
+  const hoursQuery = useQuery({
+    queryKey: ['working_hours'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('working_hours').select('*');
+      if (error) throw error;
+      return (data ?? []) as WorkingHours[];
+    },
+    staleTime: 60_000,
+  });
+
   const bookings = (bookingsQuery.data ?? []).filter(
     (b) => b.status !== 'cancelled' && b.status !== 'expired',
   );
   const stats = statsQuery.data;
 
-  const hours = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 8), []);
+  const hours = useMemo(() => {
+    const rows = (hoursQuery.data ?? []).filter((h) => !h.is_closed);
+    if (rows.length === 0) return Array.from({ length: 14 }, (_, i) => i + 8);
+    const parseHour = (t: string) => Number(String(t).slice(0, 2));
+    const openH = Math.min(...rows.map((h) => parseHour(h.open_time)));
+    const closeH = Math.max(...rows.map((h) => parseHour(h.close_time)));
+    const start = Number.isFinite(openH) ? Math.max(0, openH) : 8;
+    const end = Number.isFinite(closeH) ? Math.min(23, Math.max(start, closeH)) : 21;
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [hoursQuery.data]);
 
   useEffect(() => {
     if (viewMode === 'day' && nowLineRef.current) {
