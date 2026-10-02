@@ -256,6 +256,7 @@
     "waNeeded": "التوكن ده مفتاح سري من فيسبوك/ميتا بيخلي واتساب يبعت لوحده من غير ما تفتح الموبايل. لو فاضي: التذكير اليدوي من تبويب التذكيرات لسه شغال، والتنبيهات جوه الأدمن شغالة.",
     "waHowTitle": "إزاي تجيب Access Token (مجاني للبداية)",
     "waHowBody": "1) ادخل developers.facebook.com وافتح تطبيق واتساب Cloud API.\n2) من WhatsApp > API Setup انسخ Phone number ID.\n3) اعمل Temporary access token (أو System User token دائم) والصقه هنا.\n4) احفظ — التذكير وتأكيد الحجوزات يقدروا يتبعتوا أوتوماتيك.",
+    "manualRemindersOnly": "التذكير الأوتوماتيك مقفول دلوقتي. ابعت من تبويب التذكيرات يدوي عن طريق واتساب (مجاني).",
     "allowPayAtShop": "السماح بالدفع في المحل",
     "instapay": "رقم / حساب InstaPay",
     "vodafone": "فودافون كاش",
