@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -21,15 +22,6 @@ type Product = {
   sort_order: number;
 };
 
-type ProductOrder = {
-  id: string;
-  product_name_ar: string;
-  product_name_en: string;
-  price_egp: number;
-  status: string;
-  created_at: string;
-};
-
 export function ProductsPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -46,16 +38,15 @@ export function ProductsPage() {
     },
   });
 
-  const ordersQuery = useQuery({
-    queryKey: ['product-orders'],
+  const pendingOrdersCount = useQuery({
+    queryKey: ['product-orders', 'count'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from('product_orders')
-        .select('id, product_name_ar, product_name_en, price_egp, status, created_at')
-        .in('status', ['awaiting', 'submitted'])
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['awaiting', 'submitted']);
       if (error) throw error;
-      return (data ?? []) as ProductOrder[];
+      return count ?? 0;
     },
     refetchInterval: 20_000,
   });
@@ -89,18 +80,6 @@ export function ProductsPage() {
       setFile(null);
       toast.success(t('app.save'));
     },
-    onError: (e) => toast.error(mapError(e, t)),
-  });
-
-  const orderStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.rpc('admin_set_product_order_status', {
-        p_order_id: id,
-        p_status: status,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['product-orders'] }),
     onError: (e) => toast.error(mapError(e, t)),
   });
 
@@ -161,35 +140,16 @@ export function ProductsPage() {
         </div>
       )}
 
-      <h2 className="text-lg font-semibold">{t('products.orders')}</h2>
-      {ordersQuery.isLoading ? (
-        <Skeleton className="h-24" />
-      ) : (ordersQuery.data ?? []).length === 0 ? (
-        <p className="text-sm text-ink-70">{t('products.emptyOrders')}</p>
-      ) : (
-        <div className="space-y-2">
-          {(ordersQuery.data ?? []).map((o) => (
-            <Card key={o.id}>
-              <CardBody className="flex flex-wrap items-center gap-2 p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{locale === 'ar' ? o.product_name_ar : o.product_name_en}</p>
-                  <p className="font-latin text-sm text-ink-70">{formatEGP(o.price_egp)} · {o.status}</p>
-                </div>
-                {o.status === 'submitted' || o.status === 'awaiting' ? (
-                  <>
-                    <Button size="sm" variant="primary" onClick={() => void orderStatus.mutate({ id: o.id, status: 'confirmed' })}>
-                      {t('products.confirm')}
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={() => void orderStatus.mutate({ id: o.id, status: 'rejected' })}>
-                      {t('products.reject')}
-                    </Button>
-                  </>
-                ) : null}
-              </CardBody>
-            </Card>
-          ))}
-        </div>
-      )}
+      <div className="space-y-2 rounded-btn border border-bark/15 bg-sand/30 p-3 text-sm text-ink-70">
+        <p>
+          {(pendingOrdersCount.data ?? 0) > 0
+            ? t('products.ordersMovedHint', { count: pendingOrdersCount.data })
+            : t('products.ordersMovedEmpty')}
+        </p>
+        <Link to="/payments#product-orders" className="inline-flex font-medium text-gold underline">
+          {t('products.openPayments')}
+        </Link>
+      </div>
     </div>
   );
 }

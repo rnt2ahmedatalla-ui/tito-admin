@@ -132,7 +132,6 @@ export function AppShell() {
           </div>
           <div className="flex items-center gap-1">
             <NotificationsBell />
-            <CountBadge count={paymentsCount} />
             <button
               type="button"
               onClick={toggleLang}

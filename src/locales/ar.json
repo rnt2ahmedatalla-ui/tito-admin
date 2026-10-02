@@ -84,7 +84,12 @@
     "viaWhatsApp": "الإثبات على واتساب",
     "checkWhatsAppHint": "افتح شات العميل واتأكد من صورة التحويل، بعدين أكّد أو ارفض.",
     "openCustomerWhatsApp": "فتح واتساب العميل",
-    "whatsappQueueHint": "العميل بيبعت صورة التحويل على واتساب. افتح الشات، اتشيك، وبعدين أكّد أو ارفض من هنا."
+    "whatsappQueueHint": "العميل بيبعت صورة التحويل على واتساب. افتح الشات، اتشيك، وبعدين أكّد أو ارفض من هنا.",
+    "productOrdersTitle": "طلبات المنتجات",
+    "productOrdersHint": "طلبات المنتجات المستنية — أكّد أو ارفض من هنا مع دفعات الحجوزات.",
+    "productOrdersEmpty": "مفيش طلبات منتجات مستنية",
+    "productBadge": "منتج",
+    "productAwaitingPay": "لسه مستني إثبات الدفع"
   },
   "reminders": {
     "title": "التذكيرات",
@@ -217,13 +222,17 @@
     "confirm": "تأكيد الطلب",
     "reject": "رفض",
     "empty": "مفيش منتجات",
-    "emptyOrders": "مفيش طلبات"
+    "emptyOrders": "مفيش طلبات",
+    "ordersMovedHint": "فيه {{count}} طلب منتج مستني — راجعهم من تبويب الدفعات.",
+    "ordersMovedEmpty": "طلبات المنتجات بتتأكد من تبويب الدفعات مع تحويلات الحجوزات.",
+    "openPayments": "فتح الدفعات"
   },
   "notifications": {
     "title": "التنبيهات",
     "empty": "مفيش تنبيهات جديدة",
     "markAll": "تعليم الكل كمقروء",
-    "unread": "{{count}} جديد"
+    "unread": "{{count}} جديد",
+    "openAction": "اضغط للفتح"
   },
   "settings": {
     "title": "الإعدادات",

@@ -184,6 +184,8 @@ export interface Database {
           title_en: string;
           body_ar: string | null;
           body_en: string | null;
+          entity: string | null;
+          entity_id: string | null;
           is_read: boolean;
           created_at: string;
         };

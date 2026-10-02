@@ -84,7 +84,12 @@
     "viaWhatsApp": "Proof on WhatsApp",
     "checkWhatsAppHint": "Open the customer chat, check the transfer screenshot, then confirm or reject.",
     "openCustomerWhatsApp": "Open customer WhatsApp",
-    "whatsappQueueHint": "Customers send transfer screenshots on WhatsApp. Open the chat, verify, then confirm or reject here."
+    "whatsappQueueHint": "Customers send transfer screenshots on WhatsApp. Open the chat, verify, then confirm or reject here.",
+    "productOrdersTitle": "Product orders",
+    "productOrdersHint": "Pending product orders — confirm or reject here with booking payments.",
+    "productOrdersEmpty": "No pending product orders",
+    "productBadge": "Product",
+    "productAwaitingPay": "Still waiting for payment proof"
   },
   "reminders": {
     "title": "Reminders",
@@ -217,13 +222,17 @@
     "confirm": "Confirm order",
     "reject": "Reject",
     "empty": "No products",
-    "emptyOrders": "No orders"
+    "emptyOrders": "No orders",
+    "ordersMovedHint": "{{count}} product order(s) waiting — review them in Payments.",
+    "ordersMovedEmpty": "Product orders are confirmed in the Payments tab with booking transfers.",
+    "openPayments": "Open Payments"
   },
   "notifications": {
     "title": "Alerts",
     "empty": "No new alerts",
     "markAll": "Mark all read",
-    "unread": "{{count}} new"
+    "unread": "{{count}} new",
+    "openAction": "Tap to open"
   },
   "settings": {
     "title": "Settings",

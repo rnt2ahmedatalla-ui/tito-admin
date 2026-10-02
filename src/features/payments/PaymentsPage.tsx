@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, MessageCircle, Volume2, VolumeX } from 'lucide-react';
@@ -166,8 +167,20 @@ function PaymentCard({
   );
 }
 
+type ProductOrderRow = {
+  id: string;
+  product_name_ar: string;
+  product_name_en: string;
+  price_egp: number;
+  status: string;
+  method: string | null;
+  created_at: string;
+  profile: { full_name: string | null; phone: string | null } | null;
+};
+
 export function PaymentsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -191,6 +204,36 @@ export function PaymentsPage() {
     staleTime: 15_000,
   });
 
+  const productOrdersQuery = useQuery({
+    queryKey: ['product-orders', 'queue'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_orders')
+        .select(
+          'id, product_name_ar, product_name_en, price_egp, status, method, created_at, profile:profiles!product_orders_user_id_fkey(full_name, phone)',
+        )
+        .in('status', ['awaiting', 'submitted'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        ...row,
+        profile: Array.isArray(row.profile) ? row.profile[0] ?? null : row.profile,
+      })) as ProductOrderRow[];
+    },
+    staleTime: 15_000,
+    refetchInterval: 20_000,
+  });
+
+  const productOrders = productOrdersQuery.data ?? [];
+
+  useEffect(() => {
+    if (location.hash !== '#product-orders') return;
+    const el = document.getElementById('product-orders');
+    if (el) {
+      window.setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    }
+  }, [location.hash, productOrders.length]);
+
   useEffect(() => {
     const channel = supabase
       .channel('payments-admin')
@@ -208,6 +251,14 @@ export function PaymentsPage() {
               /* optional sound */
             }
           }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'product_orders' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['product-orders'] });
+          void queryClient.invalidateQueries({ queryKey: ['payments-count'] });
         },
       )
       .subscribe();
@@ -246,6 +297,22 @@ export function PaymentsPage() {
       void queryClient.invalidateQueries({ queryKey: ['payments-count'] });
       setRejectId(null);
       setRejectReason('');
+    },
+    onError: (e) => toast.error(mapError(e, t)),
+  });
+
+  const productStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: 'confirmed' | 'rejected' }) => {
+      const { error } = await supabase.rpc('admin_set_product_order_status', {
+        p_order_id: id,
+        p_status: status,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      toast.success(vars.status === 'confirmed' ? t('payments.confirm') : t('payments.reject'));
+      void queryClient.invalidateQueries({ queryKey: ['product-orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['payments-count'] });
     },
     onError: (e) => toast.error(mapError(e, t)),
   });
@@ -302,7 +369,7 @@ export function PaymentsPage() {
             {t('app.retry', { defaultValue: 'Retry' })}
           </Button>
         </div>
-      ) : payments.length === 0 ? (
+      ) : payments.length === 0 && productOrders.length === 0 ? (
         <p className="py-12 text-center text-ink-70">{t('payments.empty')}</p>
       ) : (
         <div className="space-y-4">
@@ -318,6 +385,97 @@ export function PaymentsPage() {
           ))}
         </div>
       )}
+
+      <div id="product-orders" className="scroll-mt-20 space-y-3 border-t border-default pt-4">
+        <div>
+          <h2 className="text-lg font-bold text-espresso">{t('payments.productOrdersTitle')}</h2>
+          <p className="mt-1 text-sm text-ink-70">{t('payments.productOrdersHint')}</p>
+        </div>
+        {productOrdersQuery.isLoading ? (
+          <Skeleton className="h-24" />
+        ) : productOrders.length === 0 ? (
+          <p className="text-sm text-ink-70">{t('payments.productOrdersEmpty')}</p>
+        ) : (
+          <div className="space-y-3">
+            {productOrders.map((o) => {
+              const name = o.profile?.full_name ?? '—';
+              const phone = o.profile?.phone ?? '';
+              const productName =
+                i18n.language?.startsWith('ar') ? o.product_name_ar : o.product_name_en;
+              const waUrl = phone
+                ? buildWhatsAppUrl(
+                    phone,
+                    i18n.language?.startsWith('ar')
+                      ? `أهلاً ${name}، بخصوص طلب المنتج «${productName}» بمبلغ ${formatEGP(o.price_egp)} — ابعت صورة التحويل هنا لو لسه مبعتتهاش 🙏`
+                      : `Hi ${name}, about your product order “${productName}” for ${formatEGP(o.price_egp)} — please send the transfer screenshot here if you haven’t 🙏`,
+                  )
+                : null;
+              return (
+                <div
+                  key={o.id}
+                  className="rounded-card border border-bark/15 bg-white p-4 shadow-warm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <span className="inline-flex rounded-pill bg-gold/20 px-2.5 py-0.5 text-xs font-semibold text-bark">
+                        {t('payments.productBadge')}
+                      </span>
+                      <p className="text-lg font-semibold text-espresso">{productName}</p>
+                      <p className="text-xl font-bold font-latin text-espresso">
+                        {formatEGP(o.price_egp)}
+                      </p>
+                      <p className="text-sm text-ink-70">{name}</p>
+                      <p className="text-sm font-latin text-ink-70" dir="ltr">
+                        {phone || '—'}
+                      </p>
+                      {o.method ? (
+                        <p className="text-xs text-ink-70">
+                          {o.method === 'vodafone_cash' ? 'Vodafone Cash' : 'InstaPay'}
+                          {o.status === 'awaiting' ? ` · ${t('payments.productAwaitingPay')}` : null}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-ink-70">{t('payments.productAwaitingPay')}</p>
+                      )}
+                    </div>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-40">
+                      {waUrl ? (
+                        <a href={waUrl} target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="secondary" size="sm" className="w-full">
+                            <MessageCircle className="size-4" />
+                            {t('payments.openCustomerWhatsApp')}
+                          </Button>
+                        </a>
+                      ) : null}
+                      <Button
+                        variant="primary"
+                        size="md"
+                        className="w-full bg-success hover:bg-success/90"
+                        loading={productStatusMutation.isPending}
+                        onClick={() =>
+                          void productStatusMutation.mutate({ id: o.id, status: 'confirmed' })
+                        }
+                      >
+                        {t('payments.confirm')}
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="md"
+                        className="w-full"
+                        loading={productStatusMutation.isPending}
+                        onClick={() =>
+                          void productStatusMutation.mutate({ id: o.id, status: 'rejected' })
+                        }
+                      >
+                        {t('payments.reject')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <ConfirmDialog
         open={!!confirmId}
