@@ -489,6 +489,10 @@ export interface Database {
         Args: { p_from: string; p_to: string };
         Returns: Json;
       };
+      admin_finance_summary: {
+        Args: { p_from?: string | null; p_to?: string | null };
+        Returns: Json;
+      };
       admin_search_customers: {
         Args: { p_q: string; p_limit: number; p_offset: number };
         Returns: Json;

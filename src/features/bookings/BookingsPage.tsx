@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Card, CardBody } from '@/components/ui/Card';
 import { BookingDetailPanel } from '@/components/booking/BookingDetailPanel';
-import { formatCairoTime, formatCairoDateShort } from '@/lib/time';
+import { formatCairoTime, formatCairoDateShort, toCairo, cairoDateString } from '@/lib/time';
 import { formatEGP } from '@/lib/money';
 import { buildCsv } from '@/lib/whatsapp';
 import { first } from '@/lib/booking';
@@ -19,13 +20,30 @@ import { first } from '@/lib/booking';
 const PAGE_SIZE = 25;
 const ALL_STATUSES = Object.keys(BOOKING_STATUS) as BookingStatus[];
 
+type FinanceSummary = {
+  online: number;
+  cash: number;
+  bookings_total: number;
+  bookings_count: number;
+  products: number;
+  grand_total: number;
+};
+
+function cairoMonthBounds() {
+  const now = toCairo(new Date());
+  const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const to = cairoDateString(new Date());
+  return { from, to };
+}
+
 export function BookingsPage() {
   const { t, i18n } = useTranslation();
+  const month = useMemo(() => cairoMonthBounds(), []);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingStatus[]>([]);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(month.from);
+  const [dateTo, setDateTo] = useState(month.to);
   const [selected, setSelected] = useState<BookingWithRelations | null>(null);
 
   useEffect(() => {
@@ -88,6 +106,29 @@ export function BookingsPage() {
 
   const rows = useMemo(() => data?.pages.flatMap((p) => p.rows) ?? [], [data]);
 
+  const financeQuery = useQuery({
+    queryKey: ['finance-summary', dateFrom, dateTo],
+    queryFn: async () => {
+      const { data: summary, error: finErr } = await supabase.rpc('admin_finance_summary', {
+        p_from: dateFrom || null,
+        p_to: dateTo || null,
+      });
+      if (finErr) throw finErr;
+      const s = summary as FinanceSummary;
+      return {
+        online: Number(s.online ?? 0),
+        cash: Number(s.cash ?? 0),
+        bookings_total: Number(s.bookings_total ?? 0),
+        bookings_count: Number(s.bookings_count ?? 0),
+        products: Number(s.products ?? 0),
+        grand_total: Number(s.grand_total ?? 0),
+      } satisfies FinanceSummary;
+    },
+    staleTime: 15_000,
+  });
+
+  const finance = financeQuery.data;
+
   const toggleStatus = (status: BookingStatus) => {
     setStatusFilter((prev) =>
       prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
@@ -147,7 +188,7 @@ export function BookingsPage() {
         ))}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-end gap-2">
         <Input
           type="date"
           label={t('bookings.dateFrom')}
@@ -160,6 +201,76 @@ export function BookingsPage() {
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
         />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            const bounds = cairoMonthBounds();
+            setDateFrom(bounds.from);
+            setDateTo(bounds.to);
+          }}
+        >
+          {t('bookings.thisMonth')}
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <div>
+          <h2 className="text-lg font-semibold text-espresso">{t('bookings.financeTitle')}</h2>
+          <p className="text-sm text-ink-70">{t('bookings.financeHint')}</p>
+        </div>
+        {financeQuery.isLoading ? (
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+          </div>
+        ) : financeQuery.isError ? (
+          <p className="text-sm text-danger">
+            {financeQuery.error instanceof Error
+              ? financeQuery.error.message
+              : t('app.noResults')}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <Card>
+              <CardBody className="p-3">
+                <p className="text-xs text-ink-70">{t('bookings.financeOnline')}</p>
+                <p className="mt-1 font-latin text-xl font-semibold text-espresso">
+                  {formatEGP(finance?.online ?? 0)}
+                </p>
+              </CardBody>
+            </Card>
+            <Card>
+              <CardBody className="p-3">
+                <p className="text-xs text-ink-70">{t('bookings.financeCash')}</p>
+                <p className="mt-1 font-latin text-xl font-semibold text-espresso">
+                  {formatEGP(finance?.cash ?? 0)}
+                </p>
+              </CardBody>
+            </Card>
+            <Card>
+              <CardBody className="p-3">
+                <p className="text-xs text-ink-70">{t('bookings.financeProducts')}</p>
+                <p className="mt-1 font-latin text-xl font-semibold text-espresso">
+                  {formatEGP(finance?.products ?? 0)}
+                </p>
+              </CardBody>
+            </Card>
+            <Card className="border-gold/40 bg-gold/10">
+              <CardBody className="p-3">
+                <p className="text-xs text-ink-70">{t('bookings.financeTotal')}</p>
+                <p className="mt-1 font-latin text-xl font-bold text-espresso">
+                  {formatEGP(finance?.grand_total ?? 0)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-ink-70">
+                  {t('bookings.financeCount', { count: finance?.bookings_count ?? 0 })}
+                </p>
+              </CardBody>
+            </Card>
+          </div>
+        )}
       </div>
 
       {isLoading ? (

@@ -115,7 +115,16 @@
     "status": "الحالة",
     "dateFrom": "من",
     "dateTo": "إلى",
-    "service": "الخدمة"
+    "service": "الخدمة",
+    "financeTitle": "ملخص الدخل",
+    "financeHint": "حسب تاريخ المعاد في الفلتر فوق (دفعات مؤكدة بس).",
+    "financeOnline": "أونلاين",
+    "financeCash": "كاش / في المحل",
+    "financeBookings": "دخل الحجوزات",
+    "financeProducts": "دخل المنتجات",
+    "financeTotal": "الإجمالي",
+    "financeCount": "{{count}} دفعة مؤكدة",
+    "thisMonth": "الشهر ده"
   },
   "customers": {
     "title": "العملاء",

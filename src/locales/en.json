@@ -115,7 +115,16 @@
     "status": "Status",
     "dateFrom": "From",
     "dateTo": "To",
-    "service": "Service"
+    "service": "Service",
+    "financeTitle": "Income summary",
+    "financeHint": "Based on appointment dates in the filter above (confirmed payments only).",
+    "financeOnline": "Online",
+    "financeCash": "Cash / at shop",
+    "financeBookings": "Bookings income",
+    "financeProducts": "Products income",
+    "financeTotal": "Total",
+    "financeCount": "{{count}} confirmed payments",
+    "thisMonth": "This month"
   },
   "customers": {
     "title": "Customers",
