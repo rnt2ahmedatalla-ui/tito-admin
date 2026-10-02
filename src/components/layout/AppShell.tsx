@@ -82,9 +82,12 @@ export function AppShell() {
   return (
     <div className="flex min-h-dvh bg-cream font-arabic">
       <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:bg-espresso lg:text-cream">
-        <div className="flex h-16 items-center gap-3 border-b border-white/5 px-5">
-          <Logo mark height={34} />
-          <span className="text-sm font-semibold tracking-wide text-gold font-latin">tito</span>
+        <div className="flex h-16 items-center justify-between gap-2 border-b border-white/5 px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <Logo mark height={34} />
+            <span className="text-sm font-semibold tracking-wide text-gold font-latin">tito</span>
+          </div>
+          <NotificationsBell />
         </div>
         <nav className="flex-1 overflow-y-auto py-4">
           {sidebarLinks.map((link) => {
@@ -112,9 +115,6 @@ export function AppShell() {
           })}
         </nav>
         <div className="space-y-2 border-t border-white/10 p-4">
-          <div className="flex justify-end px-1">
-            <NotificationsBell />
-          </div>
           <SidebarAction
             icon={Globe}
             label={i18n.language?.startsWith('ar') ? 'English' : 'عربي'}

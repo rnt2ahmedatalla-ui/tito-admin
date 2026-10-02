@@ -14,13 +14,13 @@ export function NotificationsBell() {
     <div className="relative">
       <button
         type="button"
-        className="relative rounded-btn border border-cream/20 bg-bark/25 p-2 text-cream hover:text-gold"
+        className="relative inline-flex min-h-10 min-w-10 items-center justify-center rounded-btn border border-gold/40 bg-bark/40 p-2 text-cream hover:bg-bark/60 hover:text-gold"
         aria-label={t('notifications.title')}
         onClick={() => setOpen((v) => !v)}
       >
-        <Bell className="size-4" />
+        <Bell className="size-5 text-gold" />
         {unread > 0 ? (
-          <span className="absolute -end-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-bold text-espresso">
+          <span className="absolute -end-1.5 -top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-gold px-1.5 text-[11px] font-bold text-espresso shadow">
             {unread > 9 ? '9+' : unread}
           </span>
         ) : null}
@@ -28,7 +28,7 @@ export function NotificationsBell() {
       {open ? (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute end-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-bark/15 bg-white p-3 shadow-lg">
+          <div className="absolute end-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-bark/15 bg-white p-3 shadow-lg lg:end-auto lg:start-0">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="font-semibold text-espresso">{t('notifications.title')}</p>
               {unread > 0 ? (

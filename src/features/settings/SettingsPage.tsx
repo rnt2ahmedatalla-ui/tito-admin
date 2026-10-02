@@ -215,8 +215,14 @@ export function SettingsPage() {
             onChange={(e) => update({ reminder_minutes_before: Number(e.target.value) })}
           />
 
-          <div className="rounded-btn border border-bark/15 bg-sand/30 p-3 text-sm text-ink-70">
-            {waConfigured ? t('settings.waReady') : t('settings.waNeeded')}
+          <div className="space-y-2 rounded-btn border border-bark/15 bg-sand/30 p-3 text-sm text-ink-70">
+            <p>{waConfigured ? t('settings.waReady') : t('settings.waNeeded')}</p>
+            {!waConfigured ? (
+              <>
+                <p className="font-medium text-espresso">{t('settings.waHowTitle')}</p>
+                <p className="whitespace-pre-line">{t('settings.waHowBody')}</p>
+              </>
+            ) : null}
           </div>
 
           <Input

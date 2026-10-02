@@ -57,6 +57,16 @@ export function cairoWeekBounds(date: Date): { start: string; end: string } {
   };
 }
 
+export function cairoRangeBounds(date: Date, days: number): { start: string; end: string } {
+  const local = toZonedTime(date, CAIRO_TZ);
+  const rangeStart = startOfDay(local);
+  const rangeEnd = endOfDay(addDays(local, Math.max(0, days - 1)));
+  return {
+    start: fromZonedTime(rangeStart, CAIRO_TZ).toISOString(),
+    end: fromZonedTime(rangeEnd, CAIRO_TZ).toISOString(),
+  };
+}
+
 export function cairoDateString(date: Date): string {
   return formatInTimeZone(date, CAIRO_TZ, 'yyyy-MM-dd');
 }
