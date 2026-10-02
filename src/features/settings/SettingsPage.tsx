@@ -90,9 +90,29 @@ export function SettingsPage() {
   const saveSection = (override: Partial<Settings> = {}) => {
     const merged = { ...form, ...override };
     const parsed = settingsSchema.partial().safeParse(merged);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message ?? 'validation';
+      toast.error(msg);
+      return;
+    }
+    // Empty copy fields → null so customer site can fall back to defaults
+    const data = { ...parsed.data } as Partial<Settings>;
+    for (const key of [
+      'tagline_ar',
+      'tagline_en',
+      'hero_headline_ar',
+      'hero_headline_en',
+      'hero_support_ar',
+      'hero_support_en',
+      'about_ar',
+      'about_en',
+    ] as const) {
+      if (key in data && typeof data[key] === 'string' && !(data[key] as string).trim()) {
+        data[key] = null;
+      }
+    }
     setForm(merged);
-    void saveMutation.mutate(parsed.data);
+    void saveMutation.mutate(data);
   };
 
   if (isLoading) return <Skeleton className="h-96" />;
@@ -209,28 +229,53 @@ export function SettingsPage() {
           <h2 className="font-semibold">{t('settings.customerUi')}</h2>
           <p className="text-sm text-ink-70">{t('settings.customerUiHint')}</p>
         </CardHeader>
-        <CardBody className="grid gap-3">
-          <Input label={t('settings.taglineAr')} value={form.tagline_ar ?? ''} maxLength={100} onChange={(e) => update({ tagline_ar: e.target.value })} />
-          <Input label={t('settings.taglineEn')} value={form.tagline_en ?? ''} maxLength={100} onChange={(e) => update({ tagline_en: e.target.value })} />
-          <Input label={t('settings.heroHeadlineAr')} value={form.hero_headline_ar ?? ''} maxLength={80} onChange={(e) => update({ hero_headline_ar: e.target.value })} />
-          <Input label={t('settings.heroHeadlineEn')} value={form.hero_headline_en ?? ''} maxLength={80} onChange={(e) => update({ hero_headline_en: e.target.value })} />
-          <Input label={t('settings.heroSupportAr')} value={form.hero_support_ar ?? ''} maxLength={200} onChange={(e) => update({ hero_support_ar: e.target.value })} />
-          <Input label={t('settings.heroSupportEn')} value={form.hero_support_en ?? ''} maxLength={200} onChange={(e) => update({ hero_support_en: e.target.value })} />
-          <label className="text-sm font-medium text-ink-70">{t('settings.aboutAr')}</label>
-          <textarea
-            className="min-h-24 w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base"
-            maxLength={600}
-            value={form.about_ar ?? ''}
-            onChange={(e) => update({ about_ar: e.target.value })}
-          />
-          <label className="text-sm font-medium text-ink-70">{t('settings.aboutEn')}</label>
-          <textarea
-            className="min-h-24 w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base"
-            maxLength={600}
-            value={form.about_en ?? ''}
-            onChange={(e) => update({ about_en: e.target.value })}
-          />
-          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
+        <CardBody className="grid gap-4">
+          {(
+            [
+              ['tagline_ar', 'taglineAr', 100],
+              ['tagline_en', 'taglineEn', 100],
+              ['hero_headline_ar', 'heroHeadlineAr', 80],
+              ['hero_headline_en', 'heroHeadlineEn', 80],
+              ['hero_support_ar', 'heroSupportAr', 200],
+              ['hero_support_en', 'heroSupportEn', 200],
+              ['about_ar', 'aboutAr', 600],
+              ['about_en', 'aboutEn', 600],
+            ] as const
+          ).map(([field, labelKey, max]) => (
+            <label key={field} className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-ink-70">{t(`settings.${labelKey}`)}</span>
+              <textarea
+                className="min-h-20 w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                maxLength={max}
+                rows={field.startsWith('about') ? 5 : 2}
+                value={(form[field] as string | null | undefined) ?? ''}
+                onChange={(e) => update({ [field]: e.target.value })}
+                dir={field.endsWith('_ar') ? 'rtl' : 'ltr'}
+              />
+              <span className="text-xs text-ink-70 font-latin">
+                {((form[field] as string | null | undefined) ?? '').length}/{max}
+              </span>
+            </label>
+          ))}
+          <p className="text-sm text-ink-70">{t('settings.customerUiSaveHint')}</p>
+          <Button
+            variant="primary"
+            onClick={() =>
+              saveSection({
+                tagline_ar: form.tagline_ar ?? null,
+                tagline_en: form.tagline_en ?? null,
+                hero_headline_ar: form.hero_headline_ar ?? null,
+                hero_headline_en: form.hero_headline_en ?? null,
+                hero_support_ar: form.hero_support_ar ?? null,
+                hero_support_en: form.hero_support_en ?? null,
+                about_ar: form.about_ar ?? null,
+                about_en: form.about_en ?? null,
+              })
+            }
+            loading={saveMutation.isPending}
+          >
+            {t('app.save')}
+          </Button>
         </CardBody>
       </Card>
 
