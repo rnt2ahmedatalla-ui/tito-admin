@@ -10,8 +10,73 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatCairoDateShort } from '@/lib/time';
 import { mapError } from '@/lib/errors';
+import { cn } from '@/lib/cn';
 
 const PAGE_SIZE = 25;
+
+function CustomerCard({
+  customer,
+  onBlock,
+}: {
+  customer: CustomerSearchResult;
+  onBlock: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className={cn(
+        'rounded-card border bg-white p-4 shadow-warm',
+        customer.is_blocked ? 'border-danger/40' : 'border-bark/15',
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-espresso">
+            {customer.full_name || '—'}
+          </p>
+          <p className="mt-1 font-latin text-sm text-ink-70" dir="ltr">
+            {customer.phone || '—'}
+          </p>
+          {customer.is_blocked ? (
+            <span className="mt-2 inline-flex rounded-pill bg-danger/15 px-2 py-0.5 text-xs font-medium text-danger">
+              {t('customers.blocked')}
+            </span>
+          ) : null}
+        </div>
+        <Button
+          variant={customer.is_blocked ? 'secondary' : 'danger'}
+          size="sm"
+          className="shrink-0"
+          onClick={onBlock}
+        >
+          {customer.is_blocked ? t('customers.unblock') : t('customers.block')}
+        </Button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <div className="rounded-btn bg-sand/50 px-2.5 py-2">
+          <p className="text-xs text-ink-70">{t('customers.totalBookings')}</p>
+          <p className="font-latin font-semibold">{customer.total_bookings}</p>
+        </div>
+        <div className="rounded-btn bg-sand/50 px-2.5 py-2">
+          <p className="text-xs text-ink-70">{t('customers.completed')}</p>
+          <p className="font-latin font-semibold">{customer.completed_count}</p>
+        </div>
+        <div className="rounded-btn bg-sand/50 px-2.5 py-2">
+          <p className="text-xs text-ink-70">{t('customers.noShows')}</p>
+          <p className="font-latin font-semibold text-danger">{customer.no_show_count}</p>
+        </div>
+        <div className="rounded-btn bg-sand/50 px-2.5 py-2">
+          <p className="text-xs text-ink-70">{t('customers.lastVisit')}</p>
+          <p className="font-latin text-sm font-semibold">
+            {customer.last_visit ? formatCairoDateShort(customer.last_visit) : '—'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function CustomersPage() {
   const { t } = useTranslation();
@@ -93,40 +158,58 @@ export function CustomersPage() {
       ) : customers.length === 0 ? (
         <p className="py-8 text-center text-ink-70">{t('app.noResults')}</p>
       ) : (
-        <div className="overflow-hidden rounded-card border border-bark/15 bg-white">
-          <div className="grid grid-cols-6 gap-2 border-b border-bark/10 bg-sand/50 px-4 py-2 text-xs font-medium text-ink-70">
-            <span>{t('customers.name')}</span>
-            <span>{t('customers.phone')}</span>
-            <span>{t('customers.totalBookings')}</span>
-            <span>{t('customers.completed')}</span>
-            <span>{t('customers.noShows')}</span>
-            <span>{t('customers.lastVisit')}</span>
+        <>
+          {/* Mobile / tablet: stacked cards */}
+          <div className="space-y-3 lg:hidden">
+            {customers.map((c) => (
+              <CustomerCard key={c.id} customer={c} onBlock={() => setBlockTarget(c)} />
+            ))}
           </div>
-          {customers.map((c) => (
-            <div
-              key={c.id}
-              className="grid grid-cols-6 items-center gap-2 border-b border-bark/10 px-4 py-3 last:border-b-0"
-            >
-              <span className="truncate font-medium">{c.full_name}</span>
-              <span className="font-latin text-sm">{c.phone}</span>
-              <span className="font-latin">{c.total_bookings}</span>
-              <span className="font-latin">{c.completed_count}</span>
-              <span className="font-latin text-danger">{c.no_show_count}</span>
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-xs font-latin">
-                  {c.last_visit ? formatCairoDateShort(c.last_visit) : '—'}
-                </span>
-                <Button
-                  variant={c.is_blocked ? 'secondary' : 'danger'}
-                  size="sm"
-                  onClick={() => setBlockTarget(c)}
-                >
-                  {c.is_blocked ? t('customers.unblock') : t('customers.block')}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+
+          {/* Desktop: full table */}
+          <div className="hidden overflow-x-auto rounded-card border border-bark/15 bg-white lg:block">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-bark/10 bg-sand/50 text-start text-xs font-medium text-ink-70">
+                  <th className="px-4 py-2.5 font-medium">{t('customers.name')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('customers.phone')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('customers.totalBookings')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('customers.completed')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('customers.noShows')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('customers.lastVisit')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('customers.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((c) => (
+                  <tr key={c.id} className="border-b border-bark/10 last:border-b-0">
+                    <td className="max-w-[12rem] truncate px-4 py-3 font-medium">
+                      {c.full_name || '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-latin" dir="ltr">
+                      {c.phone || '—'}
+                    </td>
+                    <td className="px-4 py-3 font-latin">{c.total_bookings}</td>
+                    <td className="px-4 py-3 font-latin">{c.completed_count}</td>
+                    <td className="px-4 py-3 font-latin text-danger">{c.no_show_count}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-latin">
+                      {c.last_visit ? formatCairoDateShort(c.last_visit) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button
+                        variant={c.is_blocked ? 'secondary' : 'danger'}
+                        size="sm"
+                        onClick={() => setBlockTarget(c)}
+                      >
+                        {c.is_blocked ? t('customers.unblock') : t('customers.block')}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {hasNextPage ? (

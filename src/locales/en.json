@@ -127,6 +127,8 @@
     "lastVisit": "Last visit",
     "block": "Block",
     "unblock": "Unblock",
+    "blocked": "Blocked",
+    "actions": "Action",
     "blockConfirm": "Block {{name}}?",
     "unblockConfirm": "Unblock {{name}}?",
     "history": "Booking history"

@@ -127,6 +127,8 @@
     "lastVisit": "آخر زيارة",
     "block": "حظر",
     "unblock": "إلغاء الحظر",
+    "blocked": "محظور",
+    "actions": "إجراء",
     "blockConfirm": "حظر {{name}}؟",
     "unblockConfirm": "إلغاء حظر {{name}}؟",
     "history": "سجل الحجوزات"
