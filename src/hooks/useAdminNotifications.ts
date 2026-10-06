@@ -26,7 +26,7 @@ export function notificationHref(n: Pick<AdminNotification, 'kind' | 'entity'>):
     entity === 'product_order'
   ) {
     return kind.startsWith('product') || entity === 'product_order'
-      ? '/payments#product-orders'
+      ? '/more/products#product-orders'
       : '/payments';
   }
   if (kind.startsWith('booking') || entity === 'booking') {

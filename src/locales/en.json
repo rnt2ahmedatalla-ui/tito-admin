@@ -245,8 +245,9 @@
     "reject": "Reject",
     "empty": "No products",
     "emptyOrders": "No orders",
-    "ordersMovedHint": "{{count}} product order(s) waiting — review them in Payments.",
-    "ordersMovedEmpty": "Product orders are confirmed in the Payments tab with booking transfers.",
+    "ordersMovedHint": "Pending product orders are reviewed on this page.",
+    "ordersMovedEmpty": "No pending product orders right now.",
+    "ordersHereHint": "Pending customer orders — confirm or reject here.",
     "openPayments": "Open Payments"
   },
   "notifications": {

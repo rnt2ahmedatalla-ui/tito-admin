@@ -1,24 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
-/** Booking payments + product orders waiting for admin confirm/reject. */
+/** Booking payments waiting for admin confirm/reject. */
 export function usePaymentsCount() {
   return useQuery({
     queryKey: ['payments-count'],
     queryFn: async () => {
-      const [payments, products] = await Promise.all([
-        supabase
-          .from('payments')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'submitted'),
-        supabase
-          .from('product_orders')
-          .select('*', { count: 'exact', head: true })
-          .in('status', ['awaiting', 'submitted']),
-      ]);
-      if (payments.error) throw payments.error;
-      if (products.error) throw products.error;
-      return (payments.count ?? 0) + (products.count ?? 0);
+      const { count, error } = await supabase
+        .from('payments')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'submitted');
+      if (error) throw error;
+      return count ?? 0;
     },
     staleTime: 15_000,
     refetchInterval: 30_000,

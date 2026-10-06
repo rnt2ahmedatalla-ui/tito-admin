@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { MessageCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +10,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatEGP } from '@/lib/money';
 import { mapError } from '@/lib/errors';
+import { buildWhatsAppUrl } from '@/lib/whatsapp';
 
 type Product = {
   id: string;
@@ -20,6 +20,17 @@ type Product = {
   image_path: string | null;
   is_active: boolean;
   sort_order: number;
+};
+
+type ProductOrderRow = {
+  id: string;
+  product_name_ar: string;
+  product_name_en: string;
+  price_egp: number;
+  status: string;
+  method: string | null;
+  created_at: string;
+  profile: { full_name: string | null; phone: string | null } | null;
 };
 
 export function ProductsPage() {
@@ -38,16 +49,23 @@ export function ProductsPage() {
     },
   });
 
-  const pendingOrdersCount = useQuery({
-    queryKey: ['product-orders', 'count'],
+  const ordersQuery = useQuery({
+    queryKey: ['product-orders', 'queue'],
     queryFn: async () => {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from('product_orders')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['awaiting', 'submitted']);
+        .select(
+          'id, product_name_ar, product_name_en, price_egp, status, method, created_at, profile:profiles!product_orders_user_id_fkey(full_name, phone)',
+        )
+        .in('status', ['awaiting', 'submitted'])
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      return count ?? 0;
+      return (data ?? []).map((row) => ({
+        ...row,
+        profile: Array.isArray(row.profile) ? row.profile[0] ?? null : row.profile,
+      })) as ProductOrderRow[];
     },
+    staleTime: 15_000,
     refetchInterval: 20_000,
   });
 
@@ -83,7 +101,23 @@ export function ProductsPage() {
     onError: (e) => toast.error(mapError(e, t)),
   });
 
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: 'confirmed' | 'rejected' }) => {
+      const { error } = await supabase.rpc('admin_set_product_order_status', {
+        p_order_id: id,
+        p_status: status,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      toast.success(vars.status === 'confirmed' ? t('payments.confirm') : t('payments.reject'));
+      void queryClient.invalidateQueries({ queryKey: ['product-orders'] });
+    },
+    onError: (e) => toast.error(mapError(e, t)),
+  });
+
   const locale = i18n.language;
+  const orders = ordersQuery.data ?? [];
   const publicUrl = (path: string | null) =>
     path
       ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/product-images/${path}`
@@ -98,6 +132,87 @@ export function ProductsPage() {
           {t('products.add')}
         </Button>
       </div>
+
+      <section id="product-orders" className="scroll-mt-20 space-y-3">
+        <div>
+          <h2 className="text-lg font-bold text-espresso">{t('payments.productOrdersTitle')}</h2>
+          <p className="mt-1 text-sm text-ink-70">{t('products.ordersHereHint')}</p>
+        </div>
+        {ordersQuery.isLoading ? (
+          <Skeleton className="h-24" />
+        ) : orders.length === 0 ? (
+          <p className="text-sm text-ink-70">{t('payments.productOrdersEmpty')}</p>
+        ) : (
+          <div className="space-y-3">
+            {orders.map((o) => {
+              const name = o.profile?.full_name ?? '—';
+              const phone = o.profile?.phone ?? '';
+              const productName = locale?.startsWith('ar') ? o.product_name_ar : o.product_name_en;
+              const waUrl = phone
+                ? buildWhatsAppUrl(
+                    phone,
+                    locale?.startsWith('ar')
+                      ? `أهلاً ${name}، بخصوص طلب المنتج «${productName}» بمبلغ ${formatEGP(o.price_egp)} — ابعت صورة التحويل هنا لو لسه مبعتتهاش 🙏`
+                      : `Hi ${name}, about your product order “${productName}” for ${formatEGP(o.price_egp)} — please send the transfer screenshot here if you haven’t 🙏`,
+                  )
+                : null;
+              return (
+                <Card key={o.id}>
+                  <CardBody className="flex flex-wrap items-start justify-between gap-3 p-4">
+                    <div className="min-w-0 space-y-1">
+                      <span className="inline-flex rounded-pill bg-gold/20 px-2.5 py-0.5 text-xs font-semibold text-bark">
+                        {t('payments.productBadge')}
+                      </span>
+                      <p className="text-lg font-semibold text-espresso">{productName}</p>
+                      <p className="font-latin text-xl font-bold text-espresso">{formatEGP(o.price_egp)}</p>
+                      <p className="text-sm text-ink-70">{name}</p>
+                      <p className="font-latin text-sm text-ink-70" dir="ltr">
+                        {phone || '—'}
+                      </p>
+                      {o.method ? (
+                        <p className="text-xs text-ink-70">
+                          {o.method === 'vodafone_cash' ? 'Vodafone Cash' : 'InstaPay'}
+                          {o.status === 'awaiting' ? ` · ${t('payments.productAwaitingPay')}` : null}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-ink-70">{t('payments.productAwaitingPay')}</p>
+                      )}
+                    </div>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-40">
+                      {waUrl ? (
+                        <a href={waUrl} target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="secondary" size="sm" className="w-full">
+                            <MessageCircle className="size-4" />
+                            {t('payments.openCustomerWhatsApp')}
+                          </Button>
+                        </a>
+                      ) : null}
+                      <Button
+                        variant="primary"
+                        size="md"
+                        className="w-full bg-success hover:bg-success/90"
+                        loading={statusMutation.isPending}
+                        onClick={() => void statusMutation.mutate({ id: o.id, status: 'confirmed' })}
+                      >
+                        {t('payments.confirm')}
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="md"
+                        className="w-full"
+                        loading={statusMutation.isPending}
+                        onClick={() => void statusMutation.mutate({ id: o.id, status: 'rejected' })}
+                      >
+                        {t('payments.reject')}
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {showForm ? (
         <Card>
@@ -139,17 +254,6 @@ export function ProductsPage() {
           ))}
         </div>
       )}
-
-      <div className="space-y-2 rounded-btn border border-bark/15 bg-sand/30 p-3 text-sm text-ink-70">
-        <p>
-          {(pendingOrdersCount.data ?? 0) > 0
-            ? t('products.ordersMovedHint', { count: pendingOrdersCount.data })
-            : t('products.ordersMovedEmpty')}
-        </p>
-        <Link to="/payments#product-orders" className="inline-flex font-medium text-gold underline">
-          {t('products.openPayments')}
-        </Link>
-      </div>
     </div>
   );
 }
