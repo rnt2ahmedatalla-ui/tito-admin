@@ -66,9 +66,10 @@ export function HoursPage() {
           .from('working_hours')
           .update({
             is_closed: h.is_closed,
-            open_time: h.open_time,
-            close_time: h.close_time,
-            last_slot_start: h.last_slot_start,
+            open_time: h.open_time.length === 5 ? `${h.open_time}:00` : h.open_time,
+            close_time: h.close_time.length === 5 ? `${h.close_time}:00` : h.close_time,
+            last_slot_start:
+              h.last_slot_start.length === 5 ? `${h.last_slot_start}:00` : h.last_slot_start,
           })
           .eq('id', h.id);
         if (error) throw error;

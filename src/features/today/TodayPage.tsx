@@ -165,7 +165,9 @@ export function TodayPage() {
     return cells;
   }, [pickerMonth]);
 
-  const dayLabels = t('hours.days', { returnObjects: true }) as string[];
+  // Calendar grid is Sat-first; hours.days is Sun-first (matches DB day_of_week)
+  const dayLabelsSun = t('hours.days', { returnObjects: true }) as string[];
+  const dayLabels = [6, 0, 1, 2, 3, 4, 5].map((i) => dayLabelsSun[i] ?? '');
 
   const blocksForDay = (day: Date) => {
     const dayStr = cairoDateString(day);

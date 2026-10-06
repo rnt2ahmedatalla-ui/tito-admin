@@ -80,13 +80,9 @@ export function BreaksPage() {
     });
   };
 
+  // hours.days is Sun-first — index matches DB day_of_week (0=Sun … 6=Sat)
   const dayLabels = t('hours.days', { returnObjects: true }) as string[];
-  // hours.days in ar is Sat-first array — map dow 0=Sun
-  const dowLabel = (dow: number) => {
-    const arOrder = [6, 0, 1, 2, 3, 4, 5]; // sat..fri labels index
-    const idx = arOrder.indexOf(dow);
-    return dayLabels[idx] ?? String(dow);
-  };
+  const dowLabel = (dow: number) => dayLabels[dow] ?? String(dow);
 
   return (
     <div className="space-y-4">
