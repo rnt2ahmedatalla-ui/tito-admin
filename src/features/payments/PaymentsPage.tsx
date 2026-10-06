@@ -175,6 +175,7 @@ export function PaymentsPage() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem(SOUND_KEY) === 'true');
+  const [waAfterConfirm, setWaAfterConfirm] = useState<PaymentWithBooking | null>(null);
 
   const { data: payments = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payments', 'queue'],
@@ -232,6 +233,7 @@ export function PaymentsPage() {
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
       setConfirmId(null);
       if (payment) {
+        setWaAfterConfirm(payment);
         const phone = payment.profile?.phone ?? '';
         const opened = await openConfirmationWhatsApp({
           phone,
@@ -334,6 +336,40 @@ export function PaymentsPage() {
           ))}
         </div>
       )}
+
+      {waAfterConfirm ? (
+        <div className="fixed inset-x-0 bottom-20 z-40 mx-auto flex max-w-lg flex-col gap-2 px-4 lg:bottom-6">
+          <div className="rounded-card border border-gold/40 bg-white p-4 shadow-warm-lg">
+            <p className="text-sm font-medium text-espresso">{t('payments.sendConfirmWhatsApp')}</p>
+            <p className="mt-1 text-xs text-ink-70">{waAfterConfirm.profile?.full_name}</p>
+            <div className="mt-3 flex gap-2">
+              <Button
+                variant="primary"
+                className="flex-1"
+                onClick={() => {
+                  void openConfirmationWhatsApp({
+                    phone: waAfterConfirm.profile?.phone ?? '',
+                    name: waAfterConfirm.profile?.full_name ?? '',
+                    startAt: waAfterConfirm.booking?.start_at ?? new Date().toISOString(),
+                    serviceAr: waAfterConfirm.booking?.service_name_ar ?? '',
+                    serviceEn: waAfterConfirm.booking?.service_name_en ?? '',
+                    locale: i18n.language,
+                  }).then((opened) => {
+                    if (opened) toast.success(t('payments.confirmWhatsAppOpened'));
+                    else toast.error(t('reminders.noPhone'));
+                  });
+                }}
+              >
+                <MessageCircle className="size-4" />
+                {t('payments.sendConfirmWhatsApp')}
+              </Button>
+              <Button variant="ghost" onClick={() => setWaAfterConfirm(null)}>
+                {t('app.cancel')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={!!confirmId}

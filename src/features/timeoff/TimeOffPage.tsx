@@ -9,17 +9,20 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { cairoDayBounds, formatCairoDateShort, formatCairoTime } from '@/lib/time';
+import { formatCairoDateShort, formatCairoTime, fromCairoLocal } from '@/lib/time';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { mapError } from '@/lib/errors';
 import { first } from '@/lib/booking';
 
-function parseYmd(ymd: string): Date {
+function cairoBoundsForYmd(ymd: string): { start: string; end: string } {
   const parts = ymd.split('-').map(Number);
   const y = parts[0] ?? 0;
   const m = parts[1] ?? 1;
   const d = parts[2] ?? 1;
-  return new Date(y, m - 1, d);
+  // Treat Y-M-D as Africa/Cairo wall date (not browser-local)
+  const start = fromCairoLocal(new Date(y, m - 1, d, 0, 0, 0, 0)).toISOString();
+  const end = fromCairoLocal(new Date(y, m - 1, d, 23, 59, 59, 999)).toISOString();
+  return { start, end };
 }
 
 export function TimeOffPage() {
@@ -53,13 +56,32 @@ export function TimeOffPage() {
   const resolveRange = () => {
     if (form.all_day) {
       if (!form.start_date || !form.end_date) throw new Error('MISSING_RANGE');
-      const start = cairoDayBounds(parseYmd(form.start_date)).start;
-      const end = cairoDayBounds(parseYmd(form.end_date)).end;
+      const start = cairoBoundsForYmd(form.start_date).start;
+      const end = cairoBoundsForYmd(form.end_date).end;
       if (start > end) throw new Error('INVALID_RANGE');
       return { start_at: start, end_at: end, all_day: true };
     }
     if (!form.start_at || !form.end_at) throw new Error('MISSING_RANGE');
-    return { start_at: form.start_at, end_at: form.end_at, all_day: false };
+    // datetime-local has no TZ — interpret as Cairo wall time
+    const startLocal = form.start_at.length === 16 ? `${form.start_at}:00` : form.start_at;
+    const endLocal = form.end_at.length === 16 ? `${form.end_at}:00` : form.end_at;
+    const sp = startLocal.split(/[-T:]/).map(Number);
+    const ep = endLocal.split(/[-T:]/).map(Number);
+    const sy = sp[0] ?? 0;
+    const sm = sp[1] ?? 1;
+    const sd = sp[2] ?? 1;
+    const sh = sp[3] ?? 0;
+    const smin = sp[4] ?? 0;
+    const ey = ep[0] ?? 0;
+    const em = ep[1] ?? 1;
+    const ed = ep[2] ?? 1;
+    const eh = ep[3] ?? 0;
+    const emin = ep[4] ?? 0;
+    return {
+      start_at: fromCairoLocal(new Date(sy, sm - 1, sd, sh, smin, 0, 0)).toISOString(),
+      end_at: fromCairoLocal(new Date(ey, em - 1, ed, eh, emin, 0, 0)).toISOString(),
+      all_day: false,
+    };
   };
 
   const checkOverlap = async () => {
@@ -90,6 +112,7 @@ export function TimeOffPage() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['time-off'] });
+      void queryClient.invalidateQueries({ queryKey: ['bookings', 'today'] });
       setShowForm(false);
       setForm({ all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '' });
       setOverlapBookings([]);

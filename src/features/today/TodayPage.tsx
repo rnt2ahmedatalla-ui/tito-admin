@@ -181,11 +181,18 @@ export function TodayPage() {
       return s < dayEnd && e > dayStart;
     });
 
-    return { dayStr, dayBreaks, dayOff, dayBounds, dayStart, dayEnd };
+    const coversFullDay = (to: (typeof dayOff)[number]) => {
+      if (to.all_day) return true;
+      const s = parseISO(to.start_at).getTime();
+      const e = parseISO(to.end_at).getTime();
+      return s <= dayStart && e >= dayEnd;
+    };
+
+    return { dayStr, dayBreaks, dayOff, dayBounds, dayStart, dayEnd, coversFullDay };
   };
 
   const renderDayColumn = (day: Date, compact = false) => {
-    const { dayStr, dayBreaks, dayOff } = blocksForDay(day);
+    const { dayStr, dayBreaks, dayOff, coversFullDay } = blocksForDay(day);
     const dayBookings = bookings.filter((b) => cairoDateString(toCairo(b.start_at)) === dayStr);
     return (
       <Card key={dayStr} className="min-h-24">
@@ -196,7 +203,7 @@ export function TodayPage() {
               key={to.id}
               className="mb-1 w-full rounded border border-dashed border-gold/50 bg-gold/15 px-1 py-0.5 text-start text-xs text-bark"
             >
-              {to.all_day ? t('today.holidayAllDay') : t('today.holiday')}
+              {coversFullDay(to) ? t('today.holidayAllDay') : t('today.holiday')}
               {!compact && to.reason ? <span className="ms-1 truncate">· {to.reason}</span> : null}
             </div>
           ))}
@@ -359,13 +366,33 @@ export function TodayPage() {
       ) : viewMode === 'day' ? (
         <Card>
           <CardBody className="overflow-x-auto p-0">
-            {selectedDayBlocks.dayOff.some((to) => to.all_day) ? (
-              <div className="border-b border-gold/30 bg-gold/15 px-3 py-2 text-sm font-medium text-bark">
-                {t('today.holidayAllDay')}
+            {selectedDayBlocks.dayOff.some((to) => selectedDayBlocks.coversFullDay(to)) ? (
+              <div className="space-y-1 border-b border-gold/30 bg-gold/15 px-3 py-2">
                 {selectedDayBlocks.dayOff
-                  .filter((to) => to.all_day)
-                  .map((to) => (to.reason ? ` — ${to.reason}` : ''))
-                  .join('')}
+                  .filter((to) => selectedDayBlocks.coversFullDay(to))
+                  .map((to) => (
+                    <p key={to.id} className="text-sm font-medium text-bark">
+                      {t('today.holidayAllDay')}
+                      {to.reason ? ` — ${to.reason}` : ''}
+                    </p>
+                  ))}
+              </div>
+            ) : null}
+            {/* Always list any time-off for the day above the hour grid */}
+            {selectedDayBlocks.dayOff.filter((to) => !selectedDayBlocks.coversFullDay(to)).length > 0 ? (
+              <div className="space-y-1 border-b border-bark/10 bg-sand/40 px-3 py-2">
+                {selectedDayBlocks.dayOff
+                  .filter((to) => !selectedDayBlocks.coversFullDay(to))
+                  .map((to) => (
+                    <p key={to.id} className="text-xs text-bark">
+                      {t('today.holiday')}
+                      {to.reason ? ` — ${to.reason}` : ''}
+                      {' · '}
+                      <span className="font-latin">
+                        {formatCairoTime(to.start_at, i18n.language)}–{formatCairoTime(to.end_at, i18n.language)}
+                      </span>
+                    </p>
+                  ))}
               </div>
             ) : null}
             <div className="relative min-w-[320px]">
@@ -379,12 +406,11 @@ export function TodayPage() {
                   return s < hourEnd && e > hourStart;
                 });
                 const hourOff = selectedDayBlocks.dayOff.filter((to) => {
-                  if (to.all_day) return false;
+                  if (selectedDayBlocks.coversFullDay(to)) return false;
                   const s = toCairo(to.start_at);
                   const e = toCairo(to.end_at);
                   const sm = s.getHours() * 60 + s.getMinutes();
                   const em = e.getHours() * 60 + e.getMinutes();
-                  // Multi-day partial: if spans full visible day segment treat as covering hour
                   const startsBefore = parseISO(to.start_at).getTime() <= selectedDayBlocks.dayStart;
                   const endsAfter = parseISO(to.end_at).getTime() >= selectedDayBlocks.dayEnd;
                   if (startsBefore && endsAfter) return true;
