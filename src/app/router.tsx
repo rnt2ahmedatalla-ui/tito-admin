@@ -13,6 +13,7 @@ const HoursPage = lazy(() => import('@/features/hours/HoursPage').then((m) => ({
 const TimeOffPage = lazy(() => import('@/features/timeoff/TimeOffPage').then((m) => ({ default: m.TimeOffPage })));
 const BreaksPage = lazy(() => import('@/features/breaks/BreaksPage').then((m) => ({ default: m.BreaksPage })));
 const ProductsPage = lazy(() => import('@/features/products/ProductsPage').then((m) => ({ default: m.ProductsPage })));
+const ReviewsPage = lazy(() => import('@/features/reviews/ReviewsPage').then((m) => ({ default: m.ReviewsPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const CustomersPage = lazy(() => import('@/features/customers/CustomersPage').then((m) => ({ default: m.CustomersPage })));
 const WalkInPage = lazy(() => import('@/features/walkin/WalkInPage').then((m) => ({ default: m.WalkInPage })));
@@ -42,6 +43,7 @@ export function AppRouter() {
           <Route path="more/time-off" element={<Suspense fallback={<PageLoader />}><TimeOffPage /></Suspense>} />
           <Route path="more/breaks" element={<Suspense fallback={<PageLoader />}><BreaksPage /></Suspense>} />
           <Route path="more/products" element={<Suspense fallback={<PageLoader />}><ProductsPage /></Suspense>} />
+          <Route path="more/reviews" element={<Suspense fallback={<PageLoader />}><ReviewsPage /></Suspense>} />
           <Route path="more/settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
           <Route path="more/customers" element={<Suspense fallback={<PageLoader />}><CustomersPage /></Suspense>} />
           <Route path="more/walk-in" element={<Suspense fallback={<PageLoader />}><WalkInPage /></Suspense>} />

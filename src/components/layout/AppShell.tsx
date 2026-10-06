@@ -34,6 +34,7 @@ const sidebarLinks = [
   { to: '/more/time-off', labelKey: 'nav.timeOff' },
   { to: '/more/breaks', labelKey: 'nav.breaks' },
   { to: '/more/products', labelKey: 'nav.products' },
+  { to: '/more/reviews', labelKey: 'nav.reviews' },
   { to: '/more/customers', labelKey: 'nav.customers' },
   { to: '/more/walk-in', labelKey: 'nav.walkIn' },
   { to: '/more/settings', labelKey: 'nav.settings' },

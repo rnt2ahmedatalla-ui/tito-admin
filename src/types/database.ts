@@ -193,6 +193,21 @@ export interface Database {
         Update: { is_read?: boolean };
         Relationships: [];
       };
+      reviews: {
+        Row: {
+          id: string;
+          booking_id: string | null;
+          user_id: string | null;
+          rating: number;
+          comment: string | null;
+          display_name: string | null;
+          rate_token: string | null;
+          created_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       booking_extras: {
         Row: {
           id: string;
@@ -506,6 +521,14 @@ export interface Database {
       };
       admin_cleanup_old_proofs: {
         Args: { p_dry_run?: boolean };
+        Returns: Json;
+      };
+      admin_add_review: {
+        Args: { p_rating: number; p_comment: string; p_display_name?: string | null };
+        Returns: Json;
+      };
+      admin_delete_review: {
+        Args: { p_id: string };
         Returns: Json;
       };
     };

@@ -45,6 +45,7 @@
     "timeOff": "Time off",
     "breaks": "Daily breaks",
     "products": "Products",
+    "reviews": "Reviews",
     "settings": "Settings",
     "customers": "Customers",
     "walkIn": "Walk-in",
@@ -249,6 +250,19 @@
     "ordersMovedEmpty": "No pending product orders right now.",
     "ordersHereHint": "Pending customer orders — confirm or reject here.",
     "openPayments": "Open Payments"
+  },
+  "reviews": {
+    "title": "Reviews",
+    "hint": "These reviews show on the customer home page. Add one manually, or wait for customers to rate after a completed visit.",
+    "add": "Add review",
+    "name": "Customer name (optional)",
+    "namePlaceholder": "e.g. Ahmed",
+    "rating": "Rating",
+    "comment": "Comment",
+    "commentPlaceholder": "Write the review text…",
+    "added": "Review added — it will show on the home page",
+    "empty": "No reviews yet",
+    "guest": "Guest"
   },
   "notifications": {
     "title": "Alerts",
