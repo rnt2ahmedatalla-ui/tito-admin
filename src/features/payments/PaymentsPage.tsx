@@ -15,6 +15,7 @@ import { formatEGP } from '@/lib/money';
 import { formatCairoTime, minutesSince, formatWaitTime } from '@/lib/time';
 import { mapError } from '@/lib/errors';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
+import { openConfirmationWhatsApp } from '@/lib/confirmWhatsApp';
 import { cn } from '@/lib/cn';
 
 const SOUND_KEY = 'tito-admin-payment-sound';
@@ -270,15 +271,30 @@ export function PaymentsPage() {
 
   const confirmMutation = useMutation({
     mutationFn: async (id: string) => {
+      const payment = payments.find((p) => p.id === id);
       const { error } = await supabase.rpc('admin_confirm_payment', { p_payment_id: id });
       if (error) throw error;
+      return payment ?? null;
     },
-    onSuccess: () => {
+    onSuccess: async (payment) => {
       toast.success(t('payments.confirm'));
       void queryClient.invalidateQueries({ queryKey: ['payments'] });
       void queryClient.invalidateQueries({ queryKey: ['payments-count'] });
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
       setConfirmId(null);
+      if (payment) {
+        const phone = payment.profile?.phone ?? '';
+        const opened = await openConfirmationWhatsApp({
+          phone,
+          name: payment.profile?.full_name ?? '',
+          startAt: payment.booking?.start_at ?? new Date().toISOString(),
+          serviceAr: payment.booking?.service_name_ar ?? '',
+          serviceEn: payment.booking?.service_name_en ?? '',
+          locale: i18n.language,
+        });
+        if (opened) toast.success(t('payments.confirmWhatsAppOpened'));
+        else if (phone) toast.error(t('reminders.noPhone'));
+      }
     },
     onError: (e) => toast.error(mapError(e, t)),
   });

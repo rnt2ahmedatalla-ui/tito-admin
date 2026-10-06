@@ -304,6 +304,7 @@ export interface Database {
           start_at: string;
           end_at: string;
           reason: string;
+          all_day: boolean;
           created_at: string;
         };
         Insert: {
@@ -311,6 +312,7 @@ export interface Database {
           start_at: string;
           end_at: string;
           reason: string;
+          all_day?: boolean;
           created_at?: string;
         };
         Update: {
@@ -318,6 +320,7 @@ export interface Database {
           start_at?: string;
           end_at?: string;
           reason?: string;
+          all_day?: boolean;
           created_at?: string;
         };
         Relationships: [];

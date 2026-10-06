@@ -15,6 +15,7 @@ import { formatEGP } from '@/lib/money';
 import { formatCairoTime, formatCairoDateShort, cairoDateString } from '@/lib/time';
 import { mapError } from '@/lib/errors';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
+import { openConfirmationWhatsApp } from '@/lib/confirmWhatsApp';
 import { supabase } from '@/lib/supabase';
 
 interface BookingDetailPanelProps {
@@ -53,9 +54,23 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
       const { error } = await supabase.rpc('admin_confirm_payment', { p_payment_id: paymentId });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('payments.confirm'));
       invalidate();
+      if (booking) {
+        const row = normalizeBooking(booking);
+        const phone = row.profile?.phone ?? '';
+        const opened = await openConfirmationWhatsApp({
+          phone,
+          name: row.profile?.full_name ?? '',
+          startAt: row.start_at,
+          serviceAr: row.service_name_ar,
+          serviceEn: row.service_name_en,
+          locale: i18n.language,
+        });
+        if (opened) toast.success(t('payments.confirmWhatsAppOpened'));
+        else if (phone) toast.error(t('booking.noPhone'));
+      }
       onClose();
     },
     onError: (e) => toast.error(mapError(e, t)),
@@ -258,6 +273,11 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
               {formatCairoDateShort(b.start_at)} — {formatCairoTime(b.start_at, locale)}
             </p>
           </div>
+        </div>
+
+        <div>
+          <p className="text-sm text-ink-70">{t('booking.notes')}</p>
+          <p className="text-sm whitespace-pre-wrap">{b.notes?.trim() ? b.notes : t('booking.noNotes')}</p>
         </div>
 
         {proofUrl ? (

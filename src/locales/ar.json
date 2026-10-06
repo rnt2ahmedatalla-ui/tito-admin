@@ -69,7 +69,10 @@
     "weekView": "أسبوع",
     "jumpToday": "النهاردة",
     "noBookings": "مفيش حجوزات النهاردة",
-    "now": "الآن"
+    "now": "الآن",
+    "break": "استراحة",
+    "holiday": "إجازة",
+    "holidayAllDay": "إجازة طوال اليوم"
   },
   "payments": {
     "title": "الدفعات",
@@ -89,7 +92,9 @@
     "productOrdersHint": "طلبات المنتجات المستنية — أكّد أو ارفض من هنا مع دفعات الحجوزات.",
     "productOrdersEmpty": "مفيش طلبات منتجات مستنية",
     "productBadge": "منتج",
-    "productAwaitingPay": "لسه مستني إثبات الدفع"
+    "productAwaitingPay": "لسه مستني إثبات الدفع",
+    "sendConfirmWhatsApp": "ابعت تأكيد على واتساب",
+    "confirmWhatsAppOpened": "اتفتح واتساب برسالة التأكيد"
   },
   "reminders": {
     "title": "التذكيرات",
@@ -173,7 +178,9 @@
     "moveCancelled": "اتلغى طلب النقل والمعاد فضل زي ما هو",
     "moveNoSlots": "مفيش مواعيد فاضية اليوم ده",
     "auditHistory": "سجل الإجراءات",
-    "proof": "إثبات الدفع"
+    "proof": "إثبات الدفع",
+    "notes": "ملاحظة العميل",
+    "noNotes": "—"
   },
   "services": {
     "title": "الخدمات",
@@ -206,6 +213,10 @@
     "reason": "السبب",
     "start": "من",
     "end": "إلى",
+    "allDay": "طوال اليوم",
+    "startDate": "من يوم",
+    "endDate": "لحد يوم",
+    "rangeRequired": "حدد الفترة صح",
     "overlapWarning": "في حجوزات متأثرة",
     "cancelAffected": "ألغِ الحجوزات دي وابعتلهم واتساب",
     "acknowledge": "فهمت، احفظ برضه"

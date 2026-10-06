@@ -2,9 +2,9 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-import { addDays, getDaysInMonth, startOfMonth, getDay } from 'date-fns';
+import { addDays, getDaysInMonth, startOfMonth, getDay, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
-import type { BookingWithRelations, DashboardStats, WorkingHours } from '@/types/database';
+import type { BookingWithRelations, DashboardStats, TimeOff, WorkingHours } from '@/types/database';
 import { Card, CardBody } from '@/components/ui/Card';
 import { KpiSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -24,6 +24,20 @@ import { cn } from '@/lib/cn';
 import { first } from '@/lib/booking';
 
 type ViewMode = 'day' | 'three' | 'week';
+
+type RecurringBreak = {
+  id: string;
+  reason: string;
+  start_time: string;
+  end_time: string;
+  days_of_week: number[];
+  is_active: boolean;
+};
+
+function timeToMinutes(time: string): number {
+  const [h, m] = String(time).split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
 
 export function TodayPage() {
   const { t, i18n } = useTranslation();
@@ -82,10 +96,41 @@ export function TodayPage() {
     staleTime: 60_000,
   });
 
+  const breaksQuery = useQuery({
+    queryKey: ['recurring-breaks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('recurring_breaks')
+        .select('*')
+        .eq('is_active', true)
+        .order('start_time', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as RecurringBreak[];
+    },
+    staleTime: 60_000,
+  });
+
+  const timeOffQuery = useQuery({
+    queryKey: ['time-off', 'today', bounds.start, bounds.end],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('time_off')
+        .select('*')
+        .lt('start_at', bounds.end)
+        .gt('end_at', bounds.start)
+        .order('start_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as TimeOff[];
+    },
+    staleTime: 30_000,
+  });
+
   const bookings = (bookingsQuery.data ?? []).filter(
     (b) => b.status !== 'cancelled' && b.status !== 'expired',
   );
   const stats = statsQuery.data;
+  const breaks = breaksQuery.data ?? [];
+  const timeOffs = timeOffQuery.data ?? [];
 
   const hours = useMemo(() => {
     const rows = (hoursQuery.data ?? []).filter((h) => !h.is_closed);
@@ -109,9 +154,8 @@ export function TodayPage() {
   const isToday = cairoDateString(selectedDate) === cairoDateString(new Date());
 
   const pickerDays = useMemo(() => {
-    const first = startOfMonth(pickerMonth);
-    // weekStartsOn Saturday = 6 for Egypt feel; getDay: 0=Sun
-    const lead = (getDay(first) + 1) % 7; // Sat=0
+    const firstDay = startOfMonth(pickerMonth);
+    const lead = (getDay(firstDay) + 1) % 7;
     const total = getDaysInMonth(pickerMonth);
     const cells: Array<Date | null> = [];
     for (let i = 0; i < lead; i++) cells.push(null);
@@ -123,13 +167,52 @@ export function TodayPage() {
 
   const dayLabels = t('hours.days', { returnObjects: true }) as string[];
 
-  const renderDayColumn = (day: Date, compact = false) => {
+  const blocksForDay = (day: Date) => {
     const dayStr = cairoDateString(day);
+    const dow = toCairo(day).getDay();
+    const dayBounds = cairoDayBounds(day);
+    const dayStart = parseISO(dayBounds.start).getTime();
+    const dayEnd = parseISO(dayBounds.end).getTime();
+
+    const dayBreaks = breaks.filter((br) => br.is_active && br.days_of_week.includes(dow));
+    const dayOff = timeOffs.filter((to) => {
+      const s = parseISO(to.start_at).getTime();
+      const e = parseISO(to.end_at).getTime();
+      return s < dayEnd && e > dayStart;
+    });
+
+    return { dayStr, dayBreaks, dayOff, dayBounds, dayStart, dayEnd };
+  };
+
+  const renderDayColumn = (day: Date, compact = false) => {
+    const { dayStr, dayBreaks, dayOff } = blocksForDay(day);
     const dayBookings = bookings.filter((b) => cairoDateString(toCairo(b.start_at)) === dayStr);
     return (
       <Card key={dayStr} className="min-h-24">
         <CardBody className={cn('p-2', !compact && 'space-y-1')}>
           <p className="mb-1 font-latin text-xs text-ink-70">{dayStr}</p>
+          {dayOff.map((to) => (
+            <div
+              key={to.id}
+              className="mb-1 w-full rounded border border-dashed border-gold/50 bg-gold/15 px-1 py-0.5 text-start text-xs text-bark"
+            >
+              {to.all_day ? t('today.holidayAllDay') : t('today.holiday')}
+              {!compact && to.reason ? <span className="ms-1 truncate">· {to.reason}</span> : null}
+            </div>
+          ))}
+          {dayBreaks.map((br) => (
+            <div
+              key={br.id}
+              className="mb-1 w-full rounded border border-dashed border-sand bg-sand/70 px-1 py-0.5 text-start text-xs text-ink-70"
+            >
+              {t('today.break')}
+              {!compact ? (
+                <span className="ms-1 font-latin">
+                  {String(br.start_time).slice(0, 5)}–{String(br.end_time).slice(0, 5)}
+                </span>
+              ) : null}
+            </div>
+          ))}
           {dayBookings.map((b) => (
             <button
               key={b.id}
@@ -149,6 +232,8 @@ export function TodayPage() {
       </Card>
     );
   };
+
+  const selectedDayBlocks = blocksForDay(selectedDate);
 
   return (
     <div className="space-y-5">
@@ -274,10 +359,44 @@ export function TodayPage() {
       ) : viewMode === 'day' ? (
         <Card>
           <CardBody className="overflow-x-auto p-0">
+            {selectedDayBlocks.dayOff.some((to) => to.all_day) ? (
+              <div className="border-b border-gold/30 bg-gold/15 px-3 py-2 text-sm font-medium text-bark">
+                {t('today.holidayAllDay')}
+                {selectedDayBlocks.dayOff
+                  .filter((to) => to.all_day)
+                  .map((to) => (to.reason ? ` — ${to.reason}` : ''))
+                  .join('')}
+              </div>
+            ) : null}
             <div className="relative min-w-[320px]">
               {hours.map((hour) => {
                 const hourStart = hour * 60;
+                const hourEnd = hourStart + 60;
                 const hourBookings = bookings.filter((b) => toCairo(b.start_at).getHours() === hour);
+                const hourBreaks = selectedDayBlocks.dayBreaks.filter((br) => {
+                  const s = timeToMinutes(br.start_time);
+                  const e = timeToMinutes(br.end_time);
+                  return s < hourEnd && e > hourStart;
+                });
+                const hourOff = selectedDayBlocks.dayOff.filter((to) => {
+                  if (to.all_day) return false;
+                  const s = toCairo(to.start_at);
+                  const e = toCairo(to.end_at);
+                  const sm = s.getHours() * 60 + s.getMinutes();
+                  const em = e.getHours() * 60 + e.getMinutes();
+                  // Multi-day partial: if spans full visible day segment treat as covering hour
+                  const startsBefore = parseISO(to.start_at).getTime() <= selectedDayBlocks.dayStart;
+                  const endsAfter = parseISO(to.end_at).getTime() >= selectedDayBlocks.dayEnd;
+                  if (startsBefore && endsAfter) return true;
+                  const dayStr = selectedDayBlocks.dayStr;
+                  const startDay = cairoDateString(toCairo(to.start_at));
+                  const endDay = cairoDateString(toCairo(to.end_at));
+                  let localStart = sm;
+                  let localEnd = em;
+                  if (startDay !== dayStr) localStart = 0;
+                  if (endDay !== dayStr) localEnd = 24 * 60;
+                  return localStart < hourEnd && localEnd > hourStart;
+                });
                 return (
                   <div key={hour} className="relative grid min-h-16 grid-cols-[60px_1fr] border-b border-bark/10">
                     <div className="border-e border-bark/10 p-2 font-latin text-xs text-ink-70">
@@ -295,6 +414,30 @@ export function TodayPage() {
                           </span>
                         </div>
                       ) : null}
+                      {hourOff.map((to) => (
+                        <div
+                          key={to.id}
+                          className="mb-1 w-full rounded-btn border border-dashed border-gold/40 bg-gold/20 p-2 text-start text-sm text-bark"
+                        >
+                          <p className="font-medium">{t('today.holiday')}</p>
+                          {to.reason ? <p className="text-xs text-ink-70">{to.reason}</p> : null}
+                        </div>
+                      ))}
+                      {hourBreaks.map((br) => (
+                        <div
+                          key={br.id}
+                          className="mb-1 w-full rounded-btn border border-dashed border-bark/20 bg-sand/80 p-2 text-start text-sm"
+                          style={{
+                            minHeight: `${Math.max(1, (timeToMinutes(br.end_time) - timeToMinutes(br.start_time)) / 15) * 12}px`,
+                          }}
+                        >
+                          <p className="font-medium text-ink-70">{t('today.break')}</p>
+                          <p className="font-latin text-xs text-ink-70">
+                            {String(br.start_time).slice(0, 5)}–{String(br.end_time).slice(0, 5)}
+                            {br.reason ? ` · ${br.reason}` : ''}
+                          </p>
+                        </div>
+                      ))}
                       {hourBookings.map((b) => (
                         <button
                           key={b.id}
@@ -329,7 +472,7 @@ export function TodayPage() {
         </div>
       )}
 
-      {!bookingsQuery.isLoading && bookings.length === 0 ? (
+      {!bookingsQuery.isLoading && bookings.length === 0 && breaks.length === 0 && timeOffs.length === 0 ? (
         <p className="py-8 text-center text-ink-70">{t('today.noBookings')}</p>
       ) : null}
 

@@ -69,7 +69,10 @@
     "weekView": "Week",
     "jumpToday": "Today",
     "noBookings": "No bookings today",
-    "now": "Now"
+    "now": "Now",
+    "break": "Break",
+    "holiday": "Time off",
+    "holidayAllDay": "All-day time off"
   },
   "payments": {
     "title": "Payments",
@@ -89,7 +92,9 @@
     "productOrdersHint": "Pending product orders — confirm or reject here with booking payments.",
     "productOrdersEmpty": "No pending product orders",
     "productBadge": "Product",
-    "productAwaitingPay": "Still waiting for payment proof"
+    "productAwaitingPay": "Still waiting for payment proof",
+    "sendConfirmWhatsApp": "Send confirmation on WhatsApp",
+    "confirmWhatsAppOpened": "WhatsApp opened with confirmation message"
   },
   "reminders": {
     "title": "Reminders",
@@ -173,7 +178,9 @@
     "moveCancelled": "Move request cancelled. The booking stays as it is.",
     "moveNoSlots": "No open times that day",
     "auditHistory": "Action history",
-    "proof": "Payment proof"
+    "proof": "Payment proof",
+    "notes": "Customer note",
+    "noNotes": "—"
   },
   "services": {
     "title": "Services",
@@ -206,6 +213,10 @@
     "reason": "Reason",
     "start": "From",
     "end": "To",
+    "allDay": "All day",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "rangeRequired": "Please set a valid range",
     "overlapWarning": "Affected bookings exist",
     "cancelAffected": "Cancel these and send WhatsApp",
     "acknowledge": "I understand, save anyway"
