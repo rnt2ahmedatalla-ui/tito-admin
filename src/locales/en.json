@@ -73,7 +73,11 @@
     "now": "Now",
     "break": "Break",
     "holiday": "Time off",
-    "holidayAllDay": "All-day time off"
+    "holidayAllDay": "All-day time off",
+    "newBooking": "New Appointment",
+    "tapToBook": "Tap to add booking",
+    "closed": "Closed",
+    "emptySlot": "Available slot"
   },
   "payments": {
     "title": "Payments",

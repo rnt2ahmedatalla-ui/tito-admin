@@ -73,7 +73,11 @@
     "now": "الآن",
     "break": "استراحة",
     "holiday": "إجازة",
-    "holidayAllDay": "إجازة طوال اليوم"
+    "holidayAllDay": "إجازة طوال اليوم",
+    "newBooking": "حجز موعد جديد",
+    "tapToBook": "اضغط لإضافة حجز",
+    "closed": "مغلق",
+    "emptySlot": "وقت متاح"
   },
   "payments": {
     "title": "الدفعات",
