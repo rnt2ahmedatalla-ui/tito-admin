@@ -43,6 +43,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_CUSTOMER_URL: ${{ vars.VITE_CUSTOMER_URL || 'https://tito-customer.vercel.app' }}
         run: npm run build
 
       - name: Upload artifact
