@@ -24,7 +24,10 @@ interface BookingDetailPanelProps {
   onClose: () => void;
 }
 
-const REBOOK_URL = 'https://tito-customer.vercel.app/book';
+const CUSTOMER_BASE_URL = (
+  import.meta.env.VITE_CUSTOMER_URL || 'https://tito-customer.vercel.app'
+).replace(/\/+$/, '');
+const REBOOK_URL = `${CUSTOMER_BASE_URL}/book`;
 
 export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPanelProps) {
   const { t, i18n } = useTranslation();
@@ -142,7 +145,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
       const phone = row.profile?.phone ?? '';
       const locale = i18n.language === 'ar' ? 'ar' : 'en';
       const when = `${formatCairoDateShort(start)} ${formatCairoTime(start, locale)}`;
-      const url = `https://tito-customer.vercel.app/move/${token}`;
+      const url = `${CUSTOMER_BASE_URL}/move/${token}`;
       const message =
         locale === 'ar'
           ? `أهلاً ${row.profile?.full_name ?? ''} 🙏\nآسف، مش هقدر أخلّصلك الحجز في المعاد اللي حجزته — مشغول في الوقت ده.\nأقدر أنقلك للمعاد ده:\n${when}\nمعادك القديم لسه ثابت. عشان أنقلك، افتح اللينك ووافق:\n${url}`

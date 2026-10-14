@@ -1,17 +1,16 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, CalendarDays, Plus, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight, CalendarDays, Plus } from 'lucide-react';
 import { addDays, getDaysInMonth, startOfMonth, getDay, parseISO } from 'date-fns';
-import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import type { BookingWithRelations, DashboardStats, Service, TimeOff, WorkingHours } from '@/types/database';
+import type { BookingWithRelations, DashboardStats, TimeOff, WorkingHours } from '@/types/database';
 import { Card, CardBody } from '@/components/ui/Card';
 import { KpiSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { BookingDetailPanel } from '@/components/booking/BookingDetailPanel';
 import { NotificationsBell } from '@/components/layout/NotificationsBell';
+import { WalkInModal } from '@/features/walkin/WalkInForm';
 import {
   cairoDayBounds,
   cairoWeekBounds,
@@ -23,7 +22,6 @@ import {
   hourLabel,
 } from '@/lib/time';
 import { formatEGPCompact } from '@/lib/money';
-import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
 import { first } from '@/lib/booking';
 
@@ -82,7 +80,6 @@ function getStatusStyle(status: string) {
 
 export function TodayPage() {
   const { t, i18n } = useTranslation();
-  const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('three');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -92,12 +89,8 @@ export function TodayPage() {
 
   // Quick Walk-In Booking modal state
   const [walkInOpen, setWalkInOpen] = useState(false);
-  const [walkInName, setWalkInName] = useState('');
-  const [walkInPhone, setWalkInPhone] = useState('');
-  const [walkInServiceId, setWalkInServiceId] = useState('');
   const [walkInDate, setWalkInDate] = useState('');
   const [walkInTime, setWalkInTime] = useState('');
-  const [walkInPaidCash, setWalkInPaidCash] = useState(true);
 
   const bounds =
     viewMode === 'day'
@@ -178,50 +171,6 @@ export function TodayPage() {
     staleTime: 30_000,
   });
 
-  const servicesQuery = useQuery({
-    queryKey: ['services'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .eq('is_active', true)
-        .eq('is_extra', false)
-        .order('sort_order');
-      if (error) throw error;
-      return (data ?? []) as Service[];
-    },
-    staleTime: 60_000,
-  });
-
-  const createBookingMutation = useMutation({
-    mutationFn: async () => {
-      if (!walkInName.trim()) throw new Error('NAME_REQUIRED');
-      if (!/^01[0125][0-9]{8}$/.test(walkInPhone.trim())) throw new Error('INVALID_PHONE');
-      if (!walkInServiceId) throw new Error('SERVICE_REQUIRED');
-      if (!walkInTime) throw new Error('TIME_REQUIRED');
-
-      const { error } = await supabase.rpc('admin_create_booking', {
-        p_name: walkInName.trim(),
-        p_phone: walkInPhone.trim(),
-        p_service_id: walkInServiceId,
-        p_start_at: walkInTime,
-        p_paid_cash: walkInPaidCash,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success(t('walkIn.create'));
-      void queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      setWalkInOpen(false);
-      setWalkInName('');
-      setWalkInPhone('');
-      setWalkInServiceId('');
-      setWalkInDate('');
-      setWalkInTime('');
-    },
-    onError: (e) => toast.error(mapError(e, t)),
-  });
 
   const bookings = (bookingsQuery.data ?? []).filter(
     (b) => b.status !== 'cancelled' && b.status !== 'expired',
@@ -732,109 +681,13 @@ export function TodayPage() {
         <Plus className="size-6 stroke-[2.5]" />
       </button>
 
-      {/* Quick Walk-In Booking Modal */}
-      {walkInOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-card border border-bark/15 bg-white p-5 shadow-warm-xl animate-fade">
-            <div className="flex items-center justify-between border-b border-bark/10 pb-3">
-              <h2 className="text-lg font-bold text-espresso">{t('today.newBooking')}</h2>
-              <button
-                type="button"
-                onClick={() => setWalkInOpen(false)}
-                className="rounded-btn p-1.5 text-ink-70 hover:bg-sand"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <Input
-                label={t('walkIn.name')}
-                value={walkInName}
-                onChange={(e) => setWalkInName(e.target.value)}
-                placeholder="e.g. Ahmed Ali"
-              />
-              <Input
-                label={t('walkIn.phone')}
-                value={walkInPhone}
-                onChange={(e) => setWalkInPhone(e.target.value)}
-                placeholder="01012345678"
-                inputMode="tel"
-              />
-              <div>
-                <label className="text-sm font-medium text-ink-70">{t('walkIn.service')}</label>
-                <select
-                  className="mt-1 min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm"
-                  value={walkInServiceId}
-                  onChange={(e) => setWalkInServiceId(e.target.value)}
-                >
-                  <option value="">— {t('common.select')} —</option>
-                  {(servicesQuery.data ?? []).map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {locale === 'ar' ? s.name_ar : s.name_en} ({s.price_egp} EGP)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  label={t('walkIn.date')}
-                  type="date"
-                  value={walkInDate}
-                  onChange={(e) => {
-                    setWalkInDate(e.target.value);
-                    if (walkInTime) {
-                      const timePart = walkInTime.split('T')[1] || '10:00:00';
-                      setWalkInTime(`${e.target.value}T${timePart}`);
-                    }
-                  }}
-                />
-                <div>
-                  <label className="text-sm font-medium text-ink-70">{t('walkIn.time')}</label>
-                  <input
-                    type="time"
-                    className="mt-1 min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 font-latin text-sm"
-                    value={walkInTime ? formatCairoTime(walkInTime, 'en').slice(0, 5) : ''}
-                    onChange={(e) => {
-                      const [h, m] = e.target.value.split(':');
-                      if (walkInDate && h && m) {
-                        const localIso = `${walkInDate}T${h}:${m}:00`;
-                        setWalkInTime(fromCairoLocal(new Date(localIso)).toISOString());
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 pt-1 text-sm text-espresso">
-                <input
-                  type="checkbox"
-                  checked={walkInPaidCash}
-                  onChange={(e) => setWalkInPaidCash(e.target.checked)}
-                  className="size-4 accent-gold"
-                />
-                {t('walkIn.paidCash')}
-              </label>
-
-              <div className="flex gap-2 pt-2">
-                <Button variant="ghost" className="w-full" onClick={() => setWalkInOpen(false)}>
-                  {t('common.cancel')}
-                </Button>
-                <Button
-                  variant="primary"
-                  className="w-full"
-                  loading={createBookingMutation.isPending}
-                  disabled={!walkInName || !walkInPhone || !walkInServiceId || !walkInTime}
-                  onClick={() => void createBookingMutation.mutate()}
-                >
-                  {t('walkIn.create')}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Shared Quick Walk-In Booking Modal */}
+      <WalkInModal
+        open={walkInOpen}
+        onClose={() => setWalkInOpen(false)}
+        initialDate={walkInDate}
+        initialTime={walkInTime}
+      />
 
       {/* Existing Booking Detail Panel */}
       <BookingDetailPanel
