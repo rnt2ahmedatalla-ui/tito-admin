@@ -23,7 +23,7 @@ import {
 } from '@/lib/time';
 import { formatEGPCompact } from '@/lib/money';
 import { cn } from '@/lib/cn';
-import { first } from '@/lib/booking';
+import { first, isOnlineBooking, isShopBooking } from '@/lib/booking';
 
 type ViewMode = 'day' | 'three' | 'week';
 
@@ -652,9 +652,27 @@ export function TodayPage() {
 
                               <div className="flex flex-1 flex-col justify-between overflow-hidden p-1 sm:p-1.5">
                                 <div className="min-w-0">
-                                  <p className="truncate text-xs font-bold leading-tight">
-                                    {customerName}
-                                  </p>
+                                    <div className="flex items-center justify-between gap-1">
+                                      <p className="truncate text-xs font-bold leading-tight">
+                                        {customerName}
+                                      </p>
+                                      <div className="flex shrink-0 items-center gap-1">
+                                        {b.status === 'confirmed' ? (
+                                          <span className="shrink-0 rounded bg-emerald-600/15 px-1 py-0.5 text-[9px] font-bold text-emerald-800 border border-emerald-600/30">
+                                            {locale === 'ar' ? 'مؤكد' : 'Confirmed'}
+                                          </span>
+                                        ) : null}
+                                        {isOnlineBooking(b) ? (
+                                          <span className="shrink-0 rounded bg-sky-600/15 px-1 py-0.5 text-[9px] font-bold text-sky-800 border border-sky-600/30">
+                                            {locale === 'ar' ? 'أونلاين' : 'Online'}
+                                          </span>
+                                        ) : isShopBooking(b) ? (
+                                          <span className="shrink-0 rounded bg-amber-600/15 px-1 py-0.5 text-[9px] font-bold text-amber-800 border border-amber-600/30">
+                                            {locale === 'ar' ? 'في المحل' : 'Shop'}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    </div>
                                   <p className="truncate text-[11px] opacity-80">
                                     {serviceName}
                                   </p>

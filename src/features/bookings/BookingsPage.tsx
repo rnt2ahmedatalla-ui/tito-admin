@@ -15,7 +15,7 @@ import { BookingDetailPanel } from '@/components/booking/BookingDetailPanel';
 import { formatCairoTime, formatCairoDateShort, toCairo, cairoDateString } from '@/lib/time';
 import { formatEGP } from '@/lib/money';
 import { buildCsv } from '@/lib/whatsapp';
-import { first } from '@/lib/booking';
+import { first, isOnlineBooking, isShopBooking } from '@/lib/booking';
 
 const PAGE_SIZE = 25;
 const ALL_STATUSES = Object.keys(BOOKING_STATUS) as BookingStatus[];
@@ -307,6 +307,15 @@ export function BookingsPage() {
               <div className="flex shrink-0 items-center gap-2">
                 <span className="text-sm font-latin">{formatEGP(booking.price_egp)}</span>
                 <StatusBadge status={booking.status} />
+                {isOnlineBooking(booking) ? (
+                  <span className="inline-flex items-center gap-1 rounded-pill bg-sky-500/15 px-2 py-0.5 text-xs font-semibold text-sky-800 border border-sky-500/30">
+                    💳 {i18n.language === 'ar' ? 'دفع أونلاين' : 'Online'}
+                  </span>
+                ) : isShopBooking(booking) ? (
+                  <span className="inline-flex items-center gap-1 rounded-pill bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-800 border border-amber-500/30">
+                    🏪 {i18n.language === 'ar' ? 'الدفع في المحل' : 'Pay at Shop'}
+                  </span>
+                ) : null}
               </div>
             </button>
           ))}

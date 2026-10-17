@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Phone, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { BookingWithRelations } from '@/types/database';
-import { normalizeBooking } from '@/lib/booking';
+import { normalizeBooking, isOnlineBooking, isShopBooking } from '@/lib/booking';
 import { Sheet } from '@/components/ui/Sheet';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -224,7 +224,18 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
   return (
     <Sheet open={open} onClose={onClose} title={t('booking.detail')}>
       <div className="space-y-4">
-        <StatusBadge status={b.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={b.status} />
+          {isOnlineBooking(b) ? (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-800 border border-sky-500/30">
+              💳 {locale === 'ar' ? 'دفع أونلاين' : 'Paid Online'}
+            </span>
+          ) : isShopBooking(b) ? (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-500/30">
+              🏪 {locale === 'ar' ? 'الدفع في المحل' : 'Pay at Shop'}
+            </span>
+          ) : null}
+        </div>
 
         <div>
           <p className="text-sm text-ink-70">{t('booking.customer')}</p>

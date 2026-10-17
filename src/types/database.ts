@@ -59,6 +59,7 @@ export interface Database {
           start_at: string;
           end_at: string;
           status: BookingStatus;
+          pay_at_shop?: boolean | null;
           hold_expires_at: string | null;
           reminder_sent_at: string | null;
           cancelled_by: string | null;
