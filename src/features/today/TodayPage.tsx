@@ -226,8 +226,19 @@ export function TodayPage() {
     return cells;
   }, [pickerMonth]);
 
-  const dayLabelsSun = t('hours.days', { returnObjects: true }) as string[];
-  const dayLabels = [6, 0, 1, 2, 3, 4, 5].map((i) => dayLabelsSun[i] ?? '');
+  const fullDaysSun = (t('hours.days', { returnObjects: true }) as string[]) || [];
+  const shortDaysSun = (t('hours.shortDays', { returnObjects: true }) as string[]) || [];
+  const dayLabels = useMemo(() => {
+    const indices = [6, 0, 1, 2, 3, 4, 5];
+    return indices.map((i) => {
+      const full = fullDaysSun[i] ?? '';
+      let short = shortDaysSun[i];
+      if (!short) {
+        short = full.startsWith('ال') ? full.slice(2) : full.slice(0, 3);
+      }
+      return { short, full };
+    });
+  }, [fullDaysSun, shortDaysSun]);
 
   const daysList = useMemo(() => {
     const start = toCairo(bounds.start);
@@ -397,9 +408,15 @@ export function TodayPage() {
                 <ChevronLeft className="size-4 rtl:-scale-x-100" />
               </Button>
             </div>
-            <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] text-ink-70">
-              {dayLabels.map((label) => (
-                <span key={label}>{label.slice(0, 2)}</span>
+            <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-ink-70">
+              {dayLabels.map((day, idx) => (
+                <span
+                  key={idx}
+                  title={day.full}
+                  className="truncate select-none py-0.5"
+                >
+                  {day.short}
+                </span>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-1">
