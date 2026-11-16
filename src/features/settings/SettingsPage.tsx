@@ -11,6 +11,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
+import { FinanceBoxesSettings } from './FinanceBoxesSettings';
 
 const settingsSchema = z.object({
   slot_step_min: z.coerce.number().min(5),
@@ -212,6 +213,8 @@ export function SettingsPage() {
           <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
         </CardBody>
       </Card>
+
+      <FinanceBoxesSettings />
 
       <Card>
         <CardHeader><h2 className="font-semibold">{t('settings.shop')}</h2></CardHeader>

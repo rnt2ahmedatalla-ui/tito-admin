@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { DashboardStats } from '@/types/database';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatEGP, formatEGPCompact } from '@/lib/money';
 import { cairoDayBounds, cairoDateString, toCairo } from '@/lib/time';
+import { computeBoxes, useFinanceBoxes } from './useFinanceBoxes';
 
 type FinanceSummary = {
   online: number;
@@ -68,6 +70,10 @@ export function FinanceTab() {
     staleTime: 15_000,
   });
   const finance = financeQuery.data;
+
+  const boxesQuery = useFinanceBoxes();
+  const boxes = boxesQuery.data ?? [];
+  const split = computeBoxes(finance?.grand_total ?? 0, boxes);
 
   return (
     <div className="space-y-6">
@@ -175,6 +181,47 @@ export function FinanceTab() {
           </div>
         )}
       </section>
+
+      {/* الصناديق */}
+      {boxesQuery.isError || !finance ? null : (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-bold text-espresso">{t('payments.boxesTitle')}</h2>
+            <p className="text-sm text-ink-70">{t('payments.boxesHint')}</p>
+          </div>
+          {boxes.length === 0 ? (
+            <p className="text-sm text-ink-70">
+              {t('payments.boxesEmpty')}{' '}
+              <Link to="/more/settings" className="font-semibold text-gold underline">
+                {t('payments.boxesEditLink')}
+              </Link>
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              {split.items.map((b) => (
+                <Card key={b.id}>
+                  <CardBody className="p-3">
+                    <p className="text-xs text-ink-70">
+                      {b.name} <span className="font-latin">· {b.pct}%</span>
+                    </p>
+                    <p className="mt-1 font-latin text-xl font-semibold text-espresso">{formatEGP(b.amount)}</p>
+                  </CardBody>
+                </Card>
+              ))}
+              <Card className="border-gold/40 bg-gold/10">
+                <CardBody className="p-3">
+                  <p className="text-xs text-ink-70">
+                    {t('payments.boxRemainder')} <span className="font-latin">· {split.remainderPct}%</span>
+                  </p>
+                  <p className="mt-1 font-latin text-xl font-bold text-espresso">
+                    {formatEGP(split.remainderAmount)}
+                  </p>
+                </CardBody>
+              </Card>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
