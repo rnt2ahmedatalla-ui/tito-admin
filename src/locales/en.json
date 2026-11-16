@@ -99,7 +99,10 @@
     "productBadge": "Product",
     "productAwaitingPay": "Still waiting for payment proof",
     "sendConfirmWhatsApp": "Send confirmation on WhatsApp",
-    "confirmWhatsAppOpened": "WhatsApp opened with confirmation message"
+    "confirmWhatsAppOpened": "WhatsApp opened with confirmation message",
+    "tabQueue": "Pending",
+    "tabFinance": "My finances",
+    "todayTitle": "Today"
   },
   "reminders": {
     "title": "Reminders",

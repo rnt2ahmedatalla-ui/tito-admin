@@ -99,7 +99,10 @@
     "productBadge": "منتج",
     "productAwaitingPay": "لسه مستني إثبات الدفع",
     "sendConfirmWhatsApp": "ابعت تأكيد على واتساب",
-    "confirmWhatsAppOpened": "اتفتح واتساب برسالة التأكيد"
+    "confirmWhatsAppOpened": "اتفتح واتساب برسالة التأكيد",
+    "tabQueue": "في الانتظار",
+    "tabFinance": "نظامي المالي",
+    "todayTitle": "النهاردة"
   },
   "reminders": {
     "title": "التذكيرات",
