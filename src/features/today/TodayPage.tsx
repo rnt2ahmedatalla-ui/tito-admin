@@ -4,9 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CalendarDays, Plus } from 'lucide-react';
 import { addDays, getDaysInMonth, startOfMonth, getDay, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
-import type { BookingWithRelations, DashboardStats, TimeOff, WorkingHours } from '@/types/database';
-import { Card, CardBody } from '@/components/ui/Card';
-import { KpiSkeleton, Skeleton } from '@/components/ui/Skeleton';
+import type { BookingWithRelations, TimeOff, WorkingHours } from '@/types/database';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { BookingDetailPanel } from '@/components/booking/BookingDetailPanel';
 import { NotificationsBell } from '@/components/layout/NotificationsBell';
@@ -21,7 +20,6 @@ import {
   fromCairoLocal,
   hourLabel,
 } from '@/lib/time';
-import { formatEGPCompact } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { first, isOnlineBooking, isShopBooking } from '@/lib/booking';
 
@@ -102,19 +100,6 @@ export function TodayPage() {
   const dayCount = viewMode === 'day' ? 1 : viewMode === 'three' ? 3 : 7;
   const stepDays = viewMode === 'day' ? 1 : viewMode === 'three' ? 3 : 7;
 
-  const statsQuery = useQuery({
-    queryKey: ['dashboard-stats', bounds.start, bounds.end],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_dashboard_stats', {
-        p_from: cairoDateString(toCairo(bounds.start)),
-        p_to: cairoDateString(toCairo(bounds.end)),
-      });
-      if (error) throw error;
-      return data as DashboardStats;
-    },
-    staleTime: 15_000,
-  });
-
   const bookingsQuery = useQuery({
     queryKey: ['bookings', 'today', bounds.start, bounds.end],
     queryFn: async () => {
@@ -175,7 +160,6 @@ export function TodayPage() {
   const bookings = (bookingsQuery.data ?? []).filter(
     (b) => b.status !== 'cancelled' && b.status !== 'expired',
   );
-  const stats = statsQuery.data;
   const breaks = breaksQuery.data ?? [];
   const timeOffs = timeOffQuery.data ?? [];
 
@@ -252,7 +236,10 @@ export function TodayPage() {
     const dayStart = parseISO(dayBounds.start).getTime();
     const dayEnd = parseISO(dayBounds.end).getTime();
 
-    const isClosed = hoursQuery.data?.find((h) => h.day_of_week === dow)?.is_closed ?? false;
+    const dayHours = hoursQuery.data?.find((h) => h.day_of_week === dow);
+    const isClosed = dayHours?.is_closed ?? false;
+    const openMin = dayHours && !dayHours.is_closed ? timeToMinutes(dayHours.open_time) : null;
+    const closeMin = dayHours && !dayHours.is_closed ? timeToMinutes(dayHours.close_time) : null;
     const dayBreaks = breaks.filter((br) => br.is_active && br.days_of_week.includes(dow));
     const dayOff = timeOffs.filter((to) => {
       const s = parseISO(to.start_at).getTime();
@@ -267,7 +254,7 @@ export function TodayPage() {
       return s <= dayStart && e >= dayEnd;
     };
 
-    return { dayStr, isClosed, dayBreaks, dayOff, dayBounds, dayStart, dayEnd, coversFullDay };
+    return { dayStr, isClosed, openMin, closeMin, dayBreaks, dayOff, dayBounds, dayStart, dayEnd, coversFullDay };
   };
 
   const handleSlotClick = (day: Date, hour: number) => {
@@ -304,7 +291,7 @@ export function TodayPage() {
               onClick={() => setSelectedDate((d) => addDays(d, -stepDays))}
               aria-label="Previous"
             >
-              <ChevronRight className="size-4 rtl:-scale-x-100" />
+              <ChevronRight className="size-4" />
             </Button>
             <Button
               variant="ghost"
@@ -312,7 +299,7 @@ export function TodayPage() {
               onClick={() => setSelectedDate((d) => addDays(d, stepDays))}
               aria-label="Next"
             >
-              <ChevronLeft className="size-4 rtl:-scale-x-100" />
+              <ChevronLeft className="size-4" />
             </Button>
           </div>
 
@@ -395,7 +382,7 @@ export function TodayPage() {
                 size="sm"
                 onClick={() => setPickerMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
               >
-                <ChevronRight className="size-4 rtl:-scale-x-100" />
+                <ChevronRight className="size-4" />
               </Button>
               <p className="font-latin text-sm font-semibold">
                 {pickerMonth.getFullYear()}-{String(pickerMonth.getMonth() + 1).padStart(2, '0')}
@@ -405,7 +392,7 @@ export function TodayPage() {
                 size="sm"
                 onClick={() => setPickerMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
               >
-                <ChevronLeft className="size-4 rtl:-scale-x-100" />
+                <ChevronLeft className="size-4" />
               </Button>
             </div>
             <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-ink-70">
@@ -447,27 +434,6 @@ export function TodayPage() {
         </>
       ) : null}
 
-      {/* KPI Stats Bar */}
-      {statsQuery.isLoading ? (
-        <KpiSkeleton />
-      ) : (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {[
-            { label: t('today.bookingsToday'), value: stats?.bookings_count ?? 0 },
-            { label: t('today.pendingPayment'), value: stats?.pending_payment_count ?? 0 },
-            { label: t('today.confirmedIncome'), value: formatEGPCompact(stats?.confirmed_income ?? 0) },
-            { label: t('today.noShows'), value: stats?.no_show_count ?? 0 },
-          ].map((kpi) => (
-            <Card key={kpi.label} className="border-default bg-white/90">
-              <CardBody className="p-2.5">
-                <p className="text-xs text-ink-70">{kpi.label}</p>
-                <p className="mt-0.5 font-latin text-lg font-bold text-espresso">{kpi.value}</p>
-              </CardBody>
-            </Card>
-          ))}
-        </div>
-      )}
-
       {/* Setmore Multi-Day Calendar Grid */}
       {bookingsQuery.isLoading ? (
         <Skeleton className="h-[520px] rounded-card" />
@@ -499,7 +465,7 @@ export function TodayPage() {
                 {daysList.map((day) => {
                   const dayStr = cairoDateString(day);
                   const isTodayDay = dayStr === cairoDateString(new Date());
-                  const { isClosed, dayBreaks, dayOff } = blocksForDay(day);
+                  const { isClosed, openMin, closeMin, dayBreaks, dayOff } = blocksForDay(day);
                   const dayBookings = bookings.filter((b) => cairoDateString(toCairo(b.start_at)) === dayStr);
 
                   const weekdayShort = new Intl.DateTimeFormat(
@@ -521,7 +487,7 @@ export function TodayPage() {
                       className={cn(
                         'flex flex-1 flex-col border-e border-bark/15 last:border-e-0',
                         minColWidth,
-                        isClosed && 'bg-bark/[0.03]',
+                        isClosed && 'bg-bark/[0.08]',
                       )}
                     >
                       {/* Strong Day Header (Sticky to Top) */}
@@ -575,6 +541,30 @@ export function TodayPage() {
                           </div>
                         ))}
 
+                        {/* Hours outside this day's opening hours (dimmed) */}
+                        {!isClosed && openMin !== null && closeMin !== null ? (
+                          <>
+                            {openMin > gridStartMinutes ? (
+                              <div
+                                style={{
+                                  top: 0,
+                                  height: `${((Math.min(openMin, gridEndMinutes) - gridStartMinutes) / 60) * HOUR_HEIGHT}px`,
+                                }}
+                                className="pointer-events-none absolute inset-x-0 z-[1] bg-bark/[0.10]"
+                              />
+                            ) : null}
+                            {closeMin < gridEndMinutes ? (
+                              <div
+                                style={{
+                                  top: `${((Math.max(closeMin, gridStartMinutes) - gridStartMinutes) / 60) * HOUR_HEIGHT}px`,
+                                  height: `${((gridEndMinutes - Math.max(closeMin, gridStartMinutes)) / 60) * HOUR_HEIGHT}px`,
+                                }}
+                                className="pointer-events-none absolute inset-x-0 z-[1] bg-bark/[0.10]"
+                              />
+                            ) : null}
+                          </>
+                        ) : null}
+
                         {/* Closed Day Texture Overlay */}
                         {isClosed ? (
                           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bark/[0.04]">
@@ -596,8 +586,8 @@ export function TodayPage() {
                               style={{ top: `${topPx}px`, height: `${hPx}px` }}
                               className="pointer-events-none absolute inset-x-1 z-5 overflow-hidden rounded border border-dashed border-bark/30 bg-sand/80 px-1.5 py-0.5 text-[11px] text-ink-70"
                             >
-                              <p className="truncate font-semibold">{t('today.break')}</p>
-                              <p className="font-latin text-[10px] text-ink-70/80">
+                              <p className="truncate font-semibold">{br.reason ? br.reason : t('today.break')}</p>
+                              <p dir="ltr" className="text-end font-latin text-[10px] text-ink-70/80">
                                 {String(br.start_time).slice(0, 5)}–{String(br.end_time).slice(0, 5)}
                               </p>
                             </div>
@@ -618,8 +608,7 @@ export function TodayPage() {
                               style={{ top: `${topPx}px`, height: `${hPx}px` }}
                               className="pointer-events-none absolute inset-x-1 z-5 overflow-hidden rounded border border-dashed border-gold/50 bg-gold/20 px-1.5 py-0.5 text-[11px] text-bark"
                             >
-                              <p className="truncate font-semibold">{t('today.holiday')}</p>
-                              {to.reason ? <p className="truncate text-[10px]">{to.reason}</p> : null}
+                              <p className="truncate font-semibold">{to.reason ? to.reason : t('today.holiday')}</p>
                             </div>
                           );
                         })}
