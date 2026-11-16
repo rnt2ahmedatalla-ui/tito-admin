@@ -4,14 +4,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, MessageCircle, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import type { PaymentWithBooking } from '@/types/database';
+import type { DashboardStats, PaymentWithBooking } from '@/types/database';
+import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useSignedProofUrl } from '@/hooks/useSignedProofUrl';
-import { formatEGP } from '@/lib/money';
-import { formatCairoTime, minutesSince, formatWaitTime } from '@/lib/time';
+import { formatEGP, formatEGPCompact } from '@/lib/money';
+import {
+  formatCairoTime,
+  minutesSince,
+  formatWaitTime,
+  cairoDayBounds,
+  cairoDateString,
+  toCairo,
+} from '@/lib/time';
 import { mapError } from '@/lib/errors';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { openConfirmationWhatsApp } from '@/lib/confirmWhatsApp';
@@ -193,6 +201,21 @@ export function PaymentsPage() {
     staleTime: 15_000,
   });
 
+  const statsQuery = useQuery({
+    queryKey: ['finance-stats', 'today'],
+    queryFn: async () => {
+      const todayBounds = cairoDayBounds(new Date());
+      const { data, error } = await supabase.rpc('admin_dashboard_stats', {
+        p_from: cairoDateString(toCairo(todayBounds.start)),
+        p_to: cairoDateString(toCairo(todayBounds.end)),
+      });
+      if (error) throw error;
+      return data as DashboardStats;
+    },
+    staleTime: 15_000,
+  });
+  const stats = statsQuery.data;
+
   useEffect(() => {
     const channel = supabase
       .channel('payments-admin')
@@ -307,6 +330,27 @@ export function PaymentsPage() {
           {t('payments.soundToggle')}
         </Button>
       </div>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-bold text-espresso">
+          {i18n.language?.startsWith('ar') ? 'نظامي المالي' : 'My finances'}
+        </h2>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {[
+            { label: t('today.bookingsToday'), value: stats ? stats.bookings_count : '—' },
+            { label: t('today.pendingPayment'), value: stats ? stats.pending_payment_count : '—' },
+            { label: t('today.confirmedIncome'), value: stats ? formatEGPCompact(stats.confirmed_income) : '—' },
+            { label: t('today.noShows'), value: stats ? stats.no_show_count : '—' },
+          ].map((kpi) => (
+            <Card key={kpi.label} className="border-default bg-white/90">
+              <CardBody className="p-2.5">
+                <p className="text-xs text-ink-70">{kpi.label}</p>
+                <p className="mt-0.5 font-latin text-lg font-bold text-espresso">{kpi.value}</p>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      </section>
 
       {isLoading ? (
         <div className="space-y-3">
