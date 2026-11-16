@@ -8,7 +8,6 @@ import type { BookingWithRelations, TimeOff, WorkingHours } from '@/types/databa
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { BookingDetailPanel } from '@/components/booking/BookingDetailPanel';
-import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import { WalkInModal } from '@/features/walkin/WalkInForm';
 import {
   cairoDayBounds,
@@ -79,7 +78,17 @@ function getStatusStyle(status: string) {
 export function TodayPage() {
   const { t, i18n } = useTranslation();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('three');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = window.localStorage.getItem('today.viewMode');
+    if (saved === 'day' || saved === 'three' || saved === 'week') return saved;
+    // الموبايل يفتح على يوم واحد، والكمبيوتر والتابلت على 3 أيام
+    return window.matchMedia('(max-width: 1023px)').matches ? 'day' : 'three';
+  });
+  const [showAllHours, setShowAllHours] = useState(false);
+
+  useEffect(() => {
+    window.localStorage.setItem('today.viewMode', viewMode);
+  }, [viewMode]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMonth, setPickerMonth] = useState(() => startOfMonth(new Date()));
   const [selectedBooking, setSelectedBooking] = useState<BookingWithRelations | null>(null);
@@ -164,15 +173,34 @@ export function TodayPage() {
   const timeOffs = timeOffQuery.data ?? [];
 
   const hours = useMemo(() => {
+    if (showAllHours) return Array.from({ length: 24 }, (_, i) => i);
     const rows = (hoursQuery.data ?? []).filter((h) => !h.is_closed);
-    if (rows.length === 0) return Array.from({ length: 14 }, (_, i) => i + 9);
     const parseHour = (time: string) => Number(String(time).slice(0, 2));
-    const openH = Math.min(...rows.map((h) => parseHour(h.open_time)));
-    const closeH = Math.max(...rows.map((h) => parseHour(h.close_time)));
-    const start = Number.isFinite(openH) ? Math.max(0, openH) : 9;
-    const end = Number.isFinite(closeH) ? Math.min(23, Math.max(start, closeH)) : 22;
+    let start = 9;
+    let end = 22;
+    if (rows.length > 0) {
+      const openH = Math.min(...rows.map((h) => parseHour(h.open_time)));
+      const closeH = Math.max(...rows.map((h) => parseHour(h.close_time)));
+      start = Number.isFinite(openH) ? Math.max(0, openH) : 9;
+      end = Number.isFinite(closeH) ? Math.min(23, Math.max(start, closeH)) : 22;
+    }
+    // وسّع التقويم تلقائياً لو فيه حجز أو إجازة برا ساعات الشغل
+    for (const b of bookings) {
+      const sLocal = toCairo(b.start_at);
+      const eLocal = toCairo(new Date(new Date(b.start_at).getTime() + b.duration_minutes * 60000));
+      start = Math.min(start, sLocal.getHours());
+      end = Math.max(end, Math.min(23, eLocal.getHours()));
+    }
+    for (const to of timeOffs) {
+      if (to.all_day) continue;
+      const sLocal = toCairo(to.start_at);
+      const eLocal = toCairo(to.end_at);
+      start = Math.min(start, sLocal.getHours());
+      end = Math.max(end, Math.min(23, eLocal.getHours()));
+    }
+    start = Math.max(0, start);
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
-  }, [hoursQuery.data]);
+  }, [hoursQuery.data, showAllHours, bookings, timeOffs]);
 
   const gridStartHour = hours[0] ?? 9;
   const gridStartMinutes = gridStartHour * 60;
@@ -330,6 +358,17 @@ export function TodayPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAllHours((v) => !v)}
+            className={cn(
+              'rounded-btn border px-2.5 py-1.5 text-xs font-medium shadow-2xs',
+              showAllHours ? 'border-gold bg-gold text-espresso' : 'border-bark/20 bg-white text-ink-70',
+            )}
+          >
+            {i18n.language?.startsWith('ar') ? 'كل الساعات' : 'All hours'}
+          </button>
+
           {/* View mode switcher */}
           <div className="flex rounded-btn border border-bark/20 bg-white p-0.5 shadow-2xs">
             <button
@@ -364,10 +403,6 @@ export function TodayPage() {
             </button>
           </div>
 
-          {/* Notifications bell in calendar header */}
-          <div className="shrink-0">
-            <NotificationsBell />
-          </div>
         </div>
       </div>
 
@@ -595,7 +630,7 @@ export function TodayPage() {
                         })}
 
                         {/* Time-off Blocks */}
-                        {dayOff.map((to) => {
+                        {dayOff.map((to, laneIdx) => {
                           const sLocal = toCairo(to.start_at);
                           const eLocal = toCairo(to.end_at);
                           const sMin = to.all_day ? gridStartMinutes : sLocal.getHours() * 60 + sLocal.getMinutes();
@@ -605,8 +640,13 @@ export function TodayPage() {
                           return (
                             <div
                               key={to.id}
-                              style={{ top: `${topPx}px`, height: `${hPx}px` }}
-                              className="pointer-events-none absolute inset-x-1 z-5 overflow-hidden rounded border border-dashed border-gold/50 bg-gold/20 px-1.5 py-0.5 text-[11px] text-bark"
+                              style={{
+                                top: `${topPx}px`,
+                                height: `${hPx}px`,
+                                left: `calc(${(laneIdx * 100) / dayOff.length}% + 4px)`,
+                                width: `calc(${100 / dayOff.length}% - 8px)`,
+                              }}
+                              className="pointer-events-none absolute z-5 overflow-hidden rounded border border-dashed border-gold/50 bg-gold/20 px-1.5 py-0.5 text-[11px] text-bark"
                             >
                               <p className="truncate font-semibold">{to.reason ? to.reason : t('today.holiday')}</p>
                             </div>
