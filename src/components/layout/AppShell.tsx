@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -157,6 +158,7 @@ export function AppShell() {
           <Outlet />
         </main>
 
+        {createPortal(
         <nav
           className="fixed inset-x-0 bottom-0 z-30 flex border-t border-bark/20 bg-espresso lg:hidden"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
@@ -190,6 +192,7 @@ export function AppShell() {
             );
           })}
         </nav>
+        , document.body)}
       </div>
 
       {showHelp ? (
