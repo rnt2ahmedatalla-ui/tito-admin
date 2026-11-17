@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -348,7 +349,7 @@ export function WalkInForm({
           />
 
           <div>
-            <label className="text-sm font-medium text-ink-70">{t('walkIn.service')}</label>
+            <label className="text-sm font-medium text-ink-70">{isAr ? 'الخدمة' : 'Service'}</label>
             <select
               className="mt-1 min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm text-espresso"
               value={serviceId}
@@ -357,7 +358,7 @@ export function WalkInForm({
                 setSlots([]);
               }}
             >
-              <option value="">— {t('common.select')} —</option>
+              <option value="">— {isAr ? 'اختر' : 'Select'} —</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
                   {locale === 'ar' ? s.name_ar : s.name_en} ({s.price_egp} EGP)
@@ -555,7 +556,7 @@ export function WalkInModal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-espresso/60 p-4 backdrop-blur-xs">
       <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-card border border-bark/15 bg-white p-5 shadow-warm-xl animate-fade">
         <div className="flex items-center justify-between border-b border-bark/10 pb-3">
@@ -579,6 +580,7 @@ export function WalkInModal({
           />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
