@@ -222,8 +222,8 @@ export function ServicesPage() {
     setForm({
       name_ar: s.name_ar,
       name_en: s.name_en,
-      description_ar: s.description_ar ?? '',
-      description_en: s.description_en ?? '',
+      description_ar: (s as Service & { description_ar?: string | null }).description_ar ?? '',
+      description_en: (s as Service & { description_en?: string | null }).description_en ?? '',
       price_egp: s.price_egp,
       duration_minutes: s.duration_minutes,
       is_active: s.is_active,
