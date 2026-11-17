@@ -34,6 +34,8 @@ import { cn } from '@/lib/cn';
 const serviceSchema = z.object({
   name_ar: z.string().min(1),
   name_en: z.string().min(1),
+  description_ar: z.string().max(300).optional(),
+  description_en: z.string().max(300).optional(),
   price_egp: z.coerce.number().min(0),
   duration_minutes: z.coerce.number().min(0).max(480),
   is_active: z.boolean(),
@@ -108,6 +110,8 @@ export function ServicesPage() {
   const [form, setForm] = useState({
     name_ar: '',
     name_en: '',
+    description_ar: '',
+    description_en: '',
     price_egp: 0,
     duration_minutes: 30,
     is_active: true,
@@ -144,6 +148,8 @@ export function ServicesPage() {
             duration_minutes: payload.is_extra ? 0 : payload.duration_minutes,
             is_active: payload.is_active,
             is_extra: payload.is_extra,
+            description_ar: payload.description_ar?.trim() || null,
+            description_en: payload.description_en?.trim() || null,
           })
           .eq('id', payload.id);
         if (error) throw error;
@@ -157,6 +163,8 @@ export function ServicesPage() {
           is_active: payload.is_active,
           is_extra: payload.is_extra,
           sort_order: maxOrder + 1,
+          description_ar: payload.description_ar?.trim() || null,
+          description_en: payload.description_en?.trim() || null,
         });
         if (error) throw error;
       }
@@ -214,6 +222,8 @@ export function ServicesPage() {
     setForm({
       name_ar: s.name_ar,
       name_en: s.name_en,
+      description_ar: s.description_ar ?? '',
+      description_en: s.description_en ?? '',
       price_egp: s.price_egp,
       duration_minutes: s.duration_minutes,
       is_active: s.is_active,
@@ -247,6 +257,8 @@ export function ServicesPage() {
     setForm({
       name_ar: '',
       name_en: '',
+      description_ar: '',
+      description_en: '',
       price_egp: 0,
       duration_minutes: extra ? 0 : 30,
       is_active: true,
@@ -295,6 +307,16 @@ export function ServicesPage() {
           <CardBody className="space-y-3">
             <Input label={t('services.nameAr')} value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} />
             <Input label={t('services.nameEn')} value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} />
+            <Input
+              label={i18n.language === 'ar' ? 'وصف الخدمة (عربي) - اختياري' : 'Service description (Arabic) - optional'}
+              value={form.description_ar}
+              onChange={(e) => setForm({ ...form, description_ar: e.target.value })}
+            />
+            <Input
+              label={i18n.language === 'ar' ? 'وصف الخدمة (إنجليزي) - اختياري' : 'Service description (English) - optional'}
+              value={form.description_en}
+              onChange={(e) => setForm({ ...form, description_en: e.target.value })}
+            />
             <Input label={t('services.price')} type="number" value={form.price_egp} onChange={(e) => setForm({ ...form, price_egp: Number(e.target.value) })} />
             {form.is_extra ? (
               <p className="text-sm text-ink-70">{t('services.extraHint')}</p>
