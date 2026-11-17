@@ -18,7 +18,7 @@ function hhmmFromIso(iso: string): string {
 }
 
 function addOneHour(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number);
+  const [h = 0, m = 0] = hhmm.split(':').map(Number);
   const total = (h * 60 + m + 60) % (24 * 60);
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
@@ -194,7 +194,12 @@ export function WalkInForm({
       if (!startAt) throw new Error('NO_SLOT');
 
       if (force) {
-        const { error } = await supabase.rpc('admin_create_booking_force', {
+        // الدالة الجديدة مش موجودة في أنواع المشروع الحالية، فبنعدّي النوع يدوياً
+        const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ error: { message: string } | null }>;
+        const { error } = await rpcUntyped('admin_create_booking_force', {
           p_name: name.trim(),
           p_phone: phone.trim(),
           p_service_id: serviceId,
