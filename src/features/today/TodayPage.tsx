@@ -475,8 +475,8 @@ export function TodayPage() {
       ) : (
         <div className="relative overflow-hidden rounded-card border border-bark/15 bg-white shadow-warm-sm">
           {/* Calendar Scroll Area */}
-          <div className="max-h-[calc(100dvh-17rem)] min-h-[460px] overflow-x-auto overflow-y-auto">
-            <div className="flex min-w-[340px]">
+          <div className="max-h-[calc(100dvh-17rem)] lg:max-h-[calc(100dvh-9rem)] min-h-[460px] overflow-x-auto overflow-y-auto">
+            <div className="flex w-full min-w-[340px]">
               {/* Left sticky time axis column */}
               <div className="sticky start-0 z-20 w-14 shrink-0 bg-white border-e border-bark/15 sm:w-16">
                 {/* Blank corner cell */}
@@ -496,12 +496,32 @@ export function TodayPage() {
               </div>
 
               {/* Day Columns Container */}
-              <div className="flex flex-1">
+              <div className="flex w-full flex-1">
                 {daysList.map((day) => {
                   const dayStr = cairoDateString(day);
                   const isTodayDay = dayStr === cairoDateString(new Date());
                   const { isClosed, openMin, closeMin, dayBreaks, dayOff } = blocksForDay(day);
                   const dayBookings = bookings.filter((b) => cairoDateString(toCairo(b.start_at)) === dayStr);
+
+                  // الحجوزات المتداخلة بتتوزع جنب بعض بدل ما تتغطى
+                  const laneEnds: number[] = [];
+                  const laneOfId = new Map<string, number>();
+                  const sortedBk = [...dayBookings].sort(
+                    (x, y) => new Date(x.start_at).getTime() - new Date(y.start_at).getTime(),
+                  );
+                  for (const bk of sortedBk) {
+                    const st = new Date(bk.start_at).getTime();
+                    const en = st + bk.duration_minutes * 60000;
+                    let lane = laneEnds.findIndex((end) => end <= st);
+                    if (lane === -1) {
+                      lane = laneEnds.length;
+                      laneEnds.push(en);
+                    } else {
+                      laneEnds[lane] = en;
+                    }
+                    laneOfId.set(bk.id, lane);
+                  }
+                  const laneCount = Math.max(1, laneEnds.length);
 
                   const weekdayShort = new Intl.DateTimeFormat(
                     locale === 'ar' ? 'ar-EG' : 'en-US',
@@ -522,6 +542,7 @@ export function TodayPage() {
                       className={cn(
                         'flex flex-1 flex-col border-e border-bark/15 last:border-e-0',
                         minColWidth,
+                        'flex-1',
                         isClosed && 'bg-bark/[0.08]',
                       )}
                     >
@@ -666,13 +687,18 @@ export function TodayPage() {
                           return (
                             <div
                               key={b.id}
-                              style={{ top: `${topPx}px`, height: `${heightPx}px` }}
+                              style={{
+                                top: `${topPx}px`,
+                                height: `${heightPx}px`,
+                                left: `calc(${((laneOfId.get(b.id) ?? 0) * 100) / laneCount}% + 4px)`,
+                                width: `calc(${100 / laneCount}% - 8px)`,
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedBooking(b);
                               }}
                               className={cn(
-                                'absolute inset-x-1 z-10 flex cursor-pointer overflow-hidden rounded-md border shadow-2xs transition-all hover:scale-[1.01] hover:shadow-xs',
+                                'absolute z-10 flex cursor-pointer overflow-hidden rounded-md border shadow-2xs transition-all hover:scale-[1.01] hover:shadow-xs',
                                 style.card,
                               )}
                             >
@@ -740,7 +766,7 @@ export function TodayPage() {
         type="button"
         onClick={handleFabClick}
         aria-label={t('today.newBooking')}
-        className="fixed bottom-20 end-5 z-30 flex size-13 items-center justify-center rounded-full bg-gold text-espresso shadow-warm-lg transition-transform hover:scale-105 active:scale-95 sm:size-14 lg:bottom-8 lg:end-8"
+        className="fixed bottom-20 end-5 z-30 flex size-13 items-center justify-center rounded-full bg-gold text-espresso shadow-warm-lg transition-transform hover:scale-105 active:scale-95 sm:size-14 lg:bottom-8 lg:end-8 lg:hidden"
       >
         <Plus className="size-6 stroke-[2.5]" />
       </button>
