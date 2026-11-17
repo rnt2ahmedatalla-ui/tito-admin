@@ -13,6 +13,16 @@ import { mapError } from '@/lib/errors';
 
 const phoneSchema = z.string().regex(/^01[0125][0-9]{8}$/);
 
+function hhmmFromIso(iso: string): string {
+  return formatCairoTime(iso, 'en').slice(0, 5);
+}
+
+function addOneHour(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = (h * 60 + m + 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 type Mode = 'booking' | 'event';
 type Customer = { id: string; full_name?: string | null; name?: string | null; phone?: string | null };
 
@@ -49,16 +59,25 @@ export function WalkInForm({
   const [slots, setSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
 
   // بيانات الوقت المقفول
   const [eventTitle, setEventTitle] = useState('');
-  const [eventStart, setEventStart] = useState('');
-  const [eventEnd, setEventEnd] = useState('');
+  const [eventStart, setEventStart] = useState(() => (initialTime ? hhmmFromIso(initialTime) : ''));
+  const [eventEnd, setEventEnd] = useState(() => (initialTime ? addOneHour(hhmmFromIso(initialTime)) : ''));
 
   useEffect(() => {
     if (initialDate) setDate(initialDate);
     if (initialTime) setTime(initialTime);
   }, [initialDate, initialTime]);
+
+  // لما تضغط على معاد في التقويم، بداية الوقت المقفول بتتملى أوتوماتيك
+  useEffect(() => {
+    if (!initialTime) return;
+    const start = hhmmFromIso(initialTime);
+    setEventStart(start);
+    setEventEnd(addOneHour(start));
+  }, [initialTime]);
 
   // تأخير البحث عشان ما يتبعتش مع كل حرف
   useEffect(() => {
@@ -147,10 +166,11 @@ export function WalkInForm({
     setEventStart('');
     setEventEnd('');
     setLastError(null);
+    setConflict(false);
   };
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (force: boolean) => {
       if (mode === 'event') {
         if (!date) throw new Error('DATE_REQUIRED');
         if (!eventTitle.trim()) throw new Error('TITLE_REQUIRED');
@@ -173,14 +193,25 @@ export function WalkInForm({
       const startAt = time || slots[0];
       if (!startAt) throw new Error('NO_SLOT');
 
-      const { error } = await supabase.rpc('admin_create_booking', {
-        p_name: name.trim(),
-        p_phone: phone.trim(),
-        p_service_id: serviceId,
-        p_start_at: startAt,
-        p_paid_cash: paidCash,
-      });
-      if (error) throw error;
+      if (force) {
+        const { error } = await supabase.rpc('admin_create_booking_force', {
+          p_name: name.trim(),
+          p_phone: phone.trim(),
+          p_service_id: serviceId,
+          p_start_at: startAt,
+          p_paid_cash: paidCash,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc('admin_create_booking', {
+          p_name: name.trim(),
+          p_phone: phone.trim(),
+          p_service_id: serviceId,
+          p_start_at: startAt,
+          p_paid_cash: paidCash,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       toast.success(mode === 'event' ? (isAr ? 'تم حفظ الوقت المقفول' : 'Blocked time saved') : t('walkIn.create'));
@@ -191,13 +222,15 @@ export function WalkInForm({
       onSuccess?.();
     },
     onError: (e) => {
+      const raw = (e as { message?: string } | null)?.message ?? '';
       const msg = mapError(e, t);
       setLastError(msg);
+      if (raw.includes('SLOT_TAKEN')) setConflict(true);
       toast.error(msg);
     },
   });
 
-  const bookingDisabled = !name || !phone || !serviceId || (!time && slots.length === 0);
+  const bookingDisabled = !name || !phone || !serviceId || (!time && slots.length === 0) || conflict;
   const eventDisabled = !date || !eventTitle.trim() || !eventStart || !eventEnd;
 
   return (
@@ -446,8 +479,38 @@ export function WalkInForm({
         </>
       )}
 
-      {lastError ? (
+      {lastError && !conflict ? (
         <div className="rounded-btn border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lastError}</div>
+      ) : null}
+
+      {conflict && mode === 'booking' ? (
+        <div className="space-y-2.5 rounded-btn border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm text-amber-900">
+            {isAr
+              ? 'المعاد ده محجوز. تقدر تأكد الحجز فوقه، أو تختار معاد تاني.'
+              : 'This slot is already booked. You can confirm on top of it, or pick another time.'}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setConflict(false);
+                setLastError(null);
+              }}
+            >
+              {isAr ? 'اختار معاد تاني' : 'Pick another time'}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={createMutation.isPending}
+              onClick={() => void createMutation.mutate(true)}
+            >
+              {isAr ? 'أكد فوق المعاد المحجوز' : 'Confirm on top'}
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       <div className="flex gap-2 pt-2">
@@ -461,7 +524,7 @@ export function WalkInForm({
           className="w-full"
           loading={createMutation.isPending}
           disabled={mode === 'booking' ? bookingDisabled : eventDisabled}
-          onClick={() => void createMutation.mutate()}
+          onClick={() => void createMutation.mutate(false)}
         >
           {mode === 'event'
             ? isAr ? 'احفظ الوقت المقفول' : 'Save blocked time'
