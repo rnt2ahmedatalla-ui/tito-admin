@@ -521,7 +521,7 @@ export function WalkInForm({
       <div className="flex gap-2 pt-2">
         {onCancel ? (
           <Button variant="ghost" className="w-full" onClick={onCancel}>
-            {t('common.cancel')}
+            {isAr ? 'إلغاء' : 'Cancel'}
           </Button>
         ) : null}
         <Button
