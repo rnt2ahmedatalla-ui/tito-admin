@@ -11,7 +11,6 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
-import { FinanceBoxesSettings } from './FinanceBoxesSettings';
 
 const settingsSchema = z.object({
   slot_step_min: z.coerce.number().min(5),
@@ -45,12 +44,18 @@ const settingsSchema = z.object({
   hero_support_en: z.string().max(200).nullable(),
   about_ar: z.string().max(600).nullable(),
   about_en: z.string().max(600).nullable(),
+  social_instagram: z.string().max(300).nullable(),
+  social_facebook: z.string().max(300).nullable(),
+  social_tiktok: z.string().max(300).nullable(),
+  social_youtube: z.string().max(300).nullable(),
+  booking_policy_ar: z.string().max(600).nullable(),
+  booking_policy_en: z.string().max(600).nullable(),
   tagline_ar: z.string().max(100).nullable(),
   tagline_en: z.string().max(100).nullable(),
 });
 
 export function SettingsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Partial<Settings>>({});
   const [dirty, setDirty] = useState(false);
@@ -87,6 +92,14 @@ export function SettingsPage() {
     setForm((prev) => ({ ...prev, ...patch }));
     setDirty(true);
   };
+
+  // الحقول الجديدة (السوشيال وسياسة الحجز) مش في تعريف الأنواع الحالي، فبنقراها بالاسم
+  const extra = form as unknown as Record<string, string | null | undefined>;
+  const updateExtra = (patch: Record<string, string>) => {
+    setForm((prev) => ({ ...prev, ...patch }) as Partial<Settings>);
+    setDirty(true);
+  };
+  const cleanText = (v: string | null | undefined) => (v ?? '').trim() || null;
 
   const saveSection = (override: Partial<Settings> = {}) => {
     const merged = { ...form, ...override };
@@ -214,8 +227,6 @@ export function SettingsPage() {
         </CardBody>
       </Card>
 
-      <FinanceBoxesSettings />
-
       <Card>
         <CardHeader><h2 className="font-semibold">{t('settings.shop')}</h2></CardHeader>
         <CardBody className="grid gap-3">
@@ -279,6 +290,86 @@ export function SettingsPage() {
           >
             {t('app.save')}
           </Button>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-semibold">
+            {i18n.language === 'ar' ? 'لينكات السوشيال وسياسة الحجز' : 'Social links & booking policy'}
+          </h2>
+          <p className="text-sm text-ink-70">
+            {i18n.language === 'ar'
+              ? 'اختياري. أي لينك فاضي مش هيظهر للعميل.'
+              : 'Optional. Empty links will not show to customers.'}
+          </p>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <Input
+            label="Instagram"
+            value={extra.social_instagram ?? ''}
+            onChange={(e) => updateExtra({ social_instagram: e.target.value })}
+            placeholder="https://instagram.com/..."
+          />
+          <Input
+            label="Facebook"
+            value={extra.social_facebook ?? ''}
+            onChange={(e) => updateExtra({ social_facebook: e.target.value })}
+            placeholder="https://facebook.com/..."
+          />
+          <Input
+            label="TikTok"
+            value={extra.social_tiktok ?? ''}
+            onChange={(e) => updateExtra({ social_tiktok: e.target.value })}
+            placeholder="https://tiktok.com/@..."
+          />
+          <Input
+            label="YouTube"
+            value={extra.social_youtube ?? ''}
+            onChange={(e) => updateExtra({ social_youtube: e.target.value })}
+            placeholder="https://youtube.com/..."
+          />
+          <div>
+            <label className="text-sm font-medium text-ink-70">
+              {i18n.language === 'ar' ? 'سياسة الحجز (عربي)' : 'Booking policy (Arabic)'}
+            </label>
+            <textarea
+              rows={4}
+              maxLength={600}
+              className="mt-1 w-full rounded-btn border border-bark/20 bg-white p-3 text-sm text-espresso"
+              value={extra.booking_policy_ar ?? ''}
+              onChange={(e) => updateExtra({ booking_policy_ar: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-ink-70">
+              {i18n.language === 'ar' ? 'سياسة الحجز (إنجليزي)' : 'Booking policy (English)'}
+            </label>
+            <textarea
+              rows={4}
+              maxLength={600}
+              className="mt-1 w-full rounded-btn border border-bark/20 bg-white p-3 text-sm text-espresso"
+              value={extra.booking_policy_en ?? ''}
+              onChange={(e) => updateExtra({ booking_policy_en: e.target.value })}
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button
+              onClick={() =>
+                saveSection({
+                  social_instagram: cleanText(extra.social_instagram),
+                  social_facebook: cleanText(extra.social_facebook),
+                  social_tiktok: cleanText(extra.social_tiktok),
+                  social_youtube: cleanText(extra.social_youtube),
+                  booking_policy_ar: cleanText(extra.booking_policy_ar),
+                  booking_policy_en: cleanText(extra.booking_policy_en),
+                } as Partial<Settings>)
+              }
+              loading={saveMutation.isPending}
+            >
+              {t('app.save')}
+            </Button>
+          </div>
         </CardBody>
       </Card>
 
