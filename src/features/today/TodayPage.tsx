@@ -387,7 +387,7 @@ export function TodayPage() {
               type="button"
               onClick={() => setViewMode('three')}
               className={cn(
-                'hidden lg:inline-flex rounded-btn px-2.5 py-1 text-xs font-medium transition-colors',
+                'rounded-btn px-2.5 py-1 text-xs font-medium transition-colors',
                 viewMode === 'three' ? 'bg-gold text-espresso font-semibold' : 'text-ink-70 hover:text-espresso',
               )}
             >
