@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CalendarDays, Plus } from 'lucide-react';
@@ -172,6 +173,26 @@ export function TodayPage() {
     (b) => b.status !== 'cancelled' && b.status !== 'expired',
   );
   const breaks = breaksQuery.data ?? [];
+
+  // فتح حجز من الإشعارات: بيروح لليوم بتاعه ويفتح تفاصيله
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepDate = searchParams.get('date');
+  const deepBooking = searchParams.get('booking');
+
+  useEffect(() => {
+    if (!deepDate) return;
+    const [y, m, d] = deepDate.split('-').map(Number);
+    if (y && m && d) setSelectedDate(new Date(y, m - 1, d, 12));
+  }, [deepDate]);
+
+  useEffect(() => {
+    if (!deepBooking) return;
+    const found = (bookingsQuery.data ?? []).find((b) => b.id === deepBooking);
+    if (found) {
+      setSelectedBooking(found as BookingWithRelations);
+      setSearchParams({}, { replace: true });
+    }
+  }, [deepBooking, bookingsQuery.data]);
   const timeOffs = timeOffQuery.data ?? [];
 
   const hours = useMemo(() => {
