@@ -17,6 +17,7 @@ import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { openConfirmationWhatsApp } from '@/lib/confirmWhatsApp';
 import { cn } from '@/lib/cn';
 import { FinanceTab } from './FinanceTab';
+import { TransfersTab } from './TransfersTab';
 
 const SOUND_KEY = 'tito-admin-payment-sound';
 
@@ -171,7 +172,7 @@ function PaymentCard({
 export function PaymentsPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'queue' | 'finance'>('queue');
+  const [tab, setTab] = useState<'queue' | 'history' | 'finance'>('queue');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -237,7 +238,6 @@ export function PaymentsPage() {
       void queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       setConfirmId(null);
       if (payment) {
-        setWaAfterConfirm(payment);
         const phone = payment.profile?.phone ?? '';
         const opened = await openConfirmationWhatsApp({
           phone,
@@ -247,8 +247,13 @@ export function PaymentsPage() {
           serviceEn: payment.booking?.service_name_en ?? '',
           locale: i18n.language,
         });
-        if (opened) toast.success(t('payments.confirmWhatsAppOpened'));
-        else if (phone) toast.error(t('reminders.noPhone'));
+        if (opened) {
+          toast.success(t('payments.confirmWhatsAppOpened'));
+        } else {
+          // المتصفح ممكن يمنع الفتح التلقائي، فنسيب زرار الإرسال اليدوي
+          setWaAfterConfirm(payment);
+          if (!phone) toast.error(t('reminders.noPhone'));
+        }
       }
     },
     onError: (e) => toast.error(mapError(e, t)),
@@ -319,6 +324,7 @@ export function PaymentsPage() {
         {(
           [
             { id: 'queue', label: t('payments.tabQueue'), count: payments.length },
+            { id: 'history', label: t('payments.tabHistory'), count: 0 },
             { id: 'finance', label: t('payments.tabFinance'), count: 0 },
           ] as const
         ).map((tabItem) => (
@@ -346,6 +352,7 @@ export function PaymentsPage() {
       </div>
 
       {tab === 'finance' ? <FinanceTab /> : null}
+      {tab === 'history' ? <TransfersTab /> : null}
 
       {tab !== 'queue' ? null : isLoading ? (
         <div className="space-y-3">
@@ -394,8 +401,10 @@ export function PaymentsPage() {
                     serviceEn: waAfterConfirm.booking?.service_name_en ?? '',
                     locale: i18n.language,
                   }).then((opened) => {
-                    if (opened) toast.success(t('payments.confirmWhatsAppOpened'));
-                    else toast.error(t('reminders.noPhone'));
+                    if (opened) {
+                      toast.success(t('payments.confirmWhatsAppOpened'));
+                      setWaAfterConfirm(null);
+                    } else toast.error(t('reminders.noPhone'));
                   });
                 }}
               >
