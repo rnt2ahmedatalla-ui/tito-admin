@@ -230,12 +230,14 @@ export function ReportsPage() {
             key={`${c.phone}-${i}`}
             type="button"
             onClick={() => navigate(`/more/customers?q=${encodeURIComponent(c.phone || c.name)}`)}
-            className="block w-full text-start hover:bg-sand/40"
+            className="block w-full border-b border-bark/10 py-2.5 text-start last:border-0 hover:bg-sand/40"
           >
-            <Line
-              left={`${i + 1}. ${c.name}${c.phone ? ` · ${c.phone}` : ''}`}
-              right={isAr ? `${c.visits} زيارة · ${formatEGP(c.spent)}` : `${c.visits} visits · ${formatEGP(c.spent)}`}
-            />
+            <span className="block break-words font-semibold text-espresso">
+              {i + 1}. {c.name}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-70 font-latin">
+              {isAr ? `${c.visits} زيارة · ${formatEGP(c.spent)}` : `${c.visits} visits · ${formatEGP(c.spent)}`}
+            </span>
           </button>
         ))}
       </Block>
