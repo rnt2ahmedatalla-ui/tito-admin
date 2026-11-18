@@ -12,6 +12,7 @@ import {
   Wrench,
   Star,
   BarChart3,
+  Ticket,
   Globe,
   LogOut,
   ChevronLeft,
@@ -22,6 +23,7 @@ import { cn } from '@/lib/cn';
 
 const links = [
   { to: '/more/reports', icon: BarChart3, labelKey: 'nav.reports' },
+  { to: '/more/coupons', icon: Ticket, labelKey: 'nav.coupons' },
   { to: '/more/services', icon: Scissors, labelKey: 'nav.services' },
   { to: '/more/hours', icon: Clock, labelKey: 'nav.hours' },
   { to: '/more/time-off', icon: CalendarOff, labelKey: 'nav.timeOff' },
