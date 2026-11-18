@@ -478,7 +478,7 @@ export function TodayPage() {
         <div className="relative overflow-hidden rounded-card border border-bark/15 bg-white shadow-warm-sm">
           {/* Calendar Scroll Area */}
           <div className="max-h-[calc(100dvh-17rem)] lg:max-h-[calc(100dvh-9rem)] min-h-[460px] overflow-x-auto overflow-y-auto">
-            <div className="flex w-full min-w-[340px]">
+            <div className="flex w-full min-w-0 lg:min-w-[340px]">
               {/* Left sticky time axis column */}
               <div className="sticky start-0 z-20 w-14 shrink-0 bg-white border-e border-bark/15 sm:w-16">
                 {/* Blank corner cell */}
@@ -535,7 +535,7 @@ export function TodayPage() {
                     viewMode === 'day'
                       ? 'min-w-[240px]'
                       : viewMode === 'three'
-                        ? 'min-w-[145px] sm:min-w-[180px]'
+                        ? 'min-w-0 flex-1 lg:min-w-[180px]'
                         : 'min-w-[120px]';
 
                   return (
