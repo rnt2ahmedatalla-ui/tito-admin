@@ -79,10 +79,10 @@ export function TodayPage() {
   const { t, i18n } = useTranslation();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = window.localStorage.getItem('today.viewMode');
     const isPhone = window.matchMedia('(max-width: 1023px)').matches;
-    if (saved === 'week') return isPhone ? 'day' : 'week';
-    if (saved === 'day' || saved === 'three') return saved;
+    if (isPhone) return 'day';
+    const saved = window.localStorage.getItem('today.viewMode');
+    if (saved === 'day' || saved === 'three' || saved === 'week') return saved;
     // الموبايل يفتح على يوم واحد، والكمبيوتر والتابلت على 3 أيام
     return window.matchMedia('(max-width: 1023px)').matches ? 'day' : 'three';
   });
@@ -387,7 +387,7 @@ export function TodayPage() {
               type="button"
               onClick={() => setViewMode('three')}
               className={cn(
-                'rounded-btn px-2.5 py-1 text-xs font-medium transition-colors',
+                'hidden lg:inline-flex rounded-btn px-2.5 py-1 text-xs font-medium transition-colors',
                 viewMode === 'three' ? 'bg-gold text-espresso font-semibold' : 'text-ink-70 hover:text-espresso',
               )}
             >
