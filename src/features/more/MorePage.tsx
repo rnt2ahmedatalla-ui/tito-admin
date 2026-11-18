@@ -11,7 +11,7 @@ import {
   UserPlus,
   Wrench,
   Star,
-  List,
+  BarChart3,
   Globe,
   LogOut,
   ChevronLeft,
@@ -21,7 +21,7 @@ import { setLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 
 const links = [
-  { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
+  { to: '/more/reports', icon: BarChart3, labelKey: 'nav.reports' },
   { to: '/more/services', icon: Scissors, labelKey: 'nav.services' },
   { to: '/more/hours', icon: Clock, labelKey: 'nav.hours' },
   { to: '/more/time-off', icon: CalendarOff, labelKey: 'nav.timeOff' },
