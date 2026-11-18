@@ -303,7 +303,7 @@ export function PaymentsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-default pb-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold font-latin">Cash</p>
+      
           <h1 className="mt-1 text-2xl font-bold text-espresso">{t('payments.title')}</h1>
           {tab === 'queue' ? (
             <p className="mt-2 max-w-2xl text-sm text-ink-70">{t('payments.whatsappQueueHint')}</p>
