@@ -39,6 +39,7 @@
     "payments": "الدفعات",
     "reminders": "التذكيرات",
     "bookings": "الحجوزات",
+    "reports": "التقارير",
     "more": "المزيد",
     "services": "الخدمات",
     "hours": "مواعيد العمل",
@@ -54,17 +55,17 @@
   "status": {
     "pending_payment": "في انتظار الدفع",
     "confirmed": "مؤكد",
-    "completed": "تم",
+    "completed": "خلص",
     "cancelled": "ملغي",
     "expired": "انتهى الوقت",
-    "no_show": "لم يحضر"
+    "no_show": "ما حضرش"
   },
   "today": {
     "title": "اليوم",
     "bookingsToday": "حجوزات اليوم",
     "pendingPayment": "في انتظار الدفع",
     "confirmedIncome": "دخل اليوم المؤكد",
-    "noShows": "لم يحضر",
+    "noShows": "ما حضرش",
     "dayView": "يوم",
     "threeDayView": "٣ أيام",
     "weekView": "أسبوع",
@@ -80,11 +81,6 @@
     "emptySlot": "وقت متاح"
   },
   "payments": {
-    "boxesTitle": "الصناديق",
-    "boxesHint": "توزيع إجمالي الدخل في الفترة المحددة على صناديقك",
-    "boxRemainder": "الباقي",
-    "boxesEmpty": "لسه مفيش صناديق.",
-    "boxesEditLink": "ضيفها من الإعدادات",
     "title": "الدفعات",
     "empty": "لا توجد دفعات في الانتظار",
     "confirm": "تأكيد التحويل",
@@ -104,10 +100,7 @@
     "productBadge": "منتج",
     "productAwaitingPay": "لسه مستني إثبات الدفع",
     "sendConfirmWhatsApp": "ابعت تأكيد على واتساب",
-    "confirmWhatsAppOpened": "اتفتح واتساب برسالة التأكيد",
-    "tabQueue": "في الانتظار",
-    "tabFinance": "نظامي المالي",
-    "todayTitle": "النهاردة"
+    "confirmWhatsAppOpened": "اتفتح واتساب برسالة التأكيد"
   },
   "reminders": {
     "title": "التذكيرات",
@@ -150,7 +143,7 @@
     "phone": "الهاتف",
     "totalBookings": "إجمالي الحجوزات",
     "completed": "مكتمل",
-    "noShows": "لم يحضر",
+    "noShows": "ما حضرش",
     "lastVisit": "آخر زيارة",
     "block": "حظر",
     "unblock": "إلغاء الحظر",
@@ -169,8 +162,8 @@
     "confirmPayment": "تأكيد الدفع",
     "rejectPayment": "رفض الدفع",
     "cancel": "إلغاء الحجز",
-    "markCompleted": "تم",
-    "markNoShow": "لم يحضر",
+    "markCompleted": "خلص",
+    "markNoShow": "ما حضرش",
     "cancelConfirm": "إلغاء حجز {{name}} الساعة {{time}}؟ هيختفي من التقويم.",
     "cancelOnly": "إلغاء بس",
     "cancelAndWhatsApp": "إلغاء وابعت واتساب",
@@ -285,17 +278,6 @@
     "openAction": "اضغط للفتح"
   },
   "settings": {
-    "financeBoxes": "صناديق المالية",
-    "financeBoxesHint": "حدد عدد الصناديق واسم كل واحد ونسبته من الإجمالي، والباقي بيتحسب لوحده.",
-    "boxName": "اسم الصندوق",
-    "boxPct": "النسبة %",
-    "addBox": "إضافة صندوق",
-    "removeBox": "حذف الصندوق",
-    "boxesSum": "مجموع النسب",
-    "boxesOver100": "مجموع النسب أكبر من 100%، عدّلها عشان تقدر تحفظ.",
-    "boxesNone": "مفيش صناديق لسه. دوس إضافة صندوق.",
-    "boxesSaved": "اتحفظت الصناديق",
-    "boxesSetupNeeded": "الصناديق محتاجة تجهيز لمرة واحدة في قاعدة البيانات (كود SQL). كلّم اللي بيظبط الموقع معاك.",
     "title": "الإعدادات",
     "booking": "الحجز",
     "payment": "الدفع",
