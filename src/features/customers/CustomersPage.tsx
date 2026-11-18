@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -276,7 +277,8 @@ function CustomerDetailPanel({
 export function CustomersPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [blockTarget, setBlockTarget] = useState<CustomerSearchResult | null>(null);
   const [openCustomer, setOpenCustomer] = useState<CustomerSearchResult | null>(null);
