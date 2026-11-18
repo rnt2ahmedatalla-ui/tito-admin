@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Phone, MessageCircle } from 'lucide-react';
@@ -221,136 +221,160 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
   const offeredAt =
     offerFor === b.id ? localOffer : b.move_status === 'pending' ? b.move_start_at : null;
 
+  const isAr = locale === 'ar';
+  const L = (ar: string, en: string) => (isAr ? ar : en);
+  const extrasList = b.extras ?? [];
+  const extrasTotal = extrasList.reduce((sum, x) => sum + Number(x.price_egp ?? 0), 0);
+  const couponInfo = b as unknown as {
+    coupon_code?: string | null;
+    discount_egp?: number | null;
+    price_before_discount?: number | null;
+  };
+  const discount = Number(couponInfo.discount_egp ?? 0);
+  const hasCoupon = !!couponInfo.coupon_code && discount > 0;
+  const methodLabel = (m: string | null | undefined) =>
+    m === 'instapay' ? 'InstaPay' : m === 'vodafone_cash' ? L('فودافون كاش', 'Vodafone Cash') : m === 'cash' ? L('كاش في المحل', 'Cash at shop') : null;
+  const payStatusLabel = (st: string | null | undefined) =>
+    st === 'submitted'
+      ? L('مستني تأكيدك', 'Awaiting your confirmation')
+      : st === 'confirmed'
+        ? L('اتأكد', 'Confirmed')
+        : st === 'rejected'
+          ? L('اترفض', 'Rejected')
+          : null;
+  const canAct = b.status !== 'cancelled' && b.status !== 'completed' && b.status !== 'expired';
+
+  const Section = ({ title, children }: { title: string; children: ReactNode }) => (
+    <section className="rounded-card border border-bark/10 bg-white p-3.5">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-70">{title}</h3>
+      {children}
+    </section>
+  );
+  const Row = ({ label, children }: { label: string; children: ReactNode }) => (
+    <div className="flex items-start justify-between gap-3 py-1 text-sm">
+      <span className="shrink-0 text-ink-70">{label}</span>
+      <span className="min-w-0 text-end font-medium text-espresso">{children}</span>
+    </div>
+  );
+
   return (
     <Sheet open={open} onClose={onClose} title={t('booking.detail')}>
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={b.status} />
-          {isOnlineBooking(b) ? (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-800 border border-sky-500/30">
-              💳 {locale === 'ar' ? 'دفع أونلاين' : 'Paid Online'}
-            </span>
-          ) : isShopBooking(b) ? (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-500/30">
-              🏪 {locale === 'ar' ? 'الدفع في المحل' : 'Pay at Shop'}
-            </span>
-          ) : null}
-        </div>
-
-        <div>
-          <p className="text-sm text-ink-70">{t('booking.customer')}</p>
-          <p className="font-semibold text-lg">{name}</p>
+      <div className="space-y-3">
+        {/* العميل */}
+        <div className="rounded-card bg-espresso p-4 text-cream">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-xl font-bold">{name}</p>
+              {phone ? <p dir="ltr" className="mt-0.5 text-start font-latin text-sm text-cream/80">{phone}</p> : null}
+            </div>
+            <StatusBadge status={b.status} />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {isOnlineBooking(b) ? (
+              <span className="inline-flex items-center gap-1 rounded-pill border border-sky-300/40 bg-sky-400/20 px-2.5 py-0.5 text-xs font-semibold text-sky-100">
+                💳 {L('دفع أونلاين', 'Paid Online')}
+              </span>
+            ) : isShopBooking(b) ? (
+              <span className="inline-flex items-center gap-1 rounded-pill border border-amber-300/40 bg-amber-400/20 px-2.5 py-0.5 text-xs font-semibold text-amber-100">
+                🏪 {L('الدفع في المحل', 'Pay at Shop')}
+              </span>
+            ) : null}
+          </div>
           {phone ? (
-            <div className="mt-2 flex gap-2">
-              <a href={`tel:${phone}`} className="inline-flex items-center gap-1 text-info text-sm">
-                <Phone className="size-4" />
-                {phone}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <a href={`tel:${phone}`} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-btn bg-cream/10 text-sm font-medium hover:bg-cream/20">
+                <Phone className="size-4" /> {L('اتصال', 'Call')}
               </a>
               {waUrl ? (
-                <a
-                  href={waUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-success text-sm"
-                >
-                  <MessageCircle className="size-4" />
-                  WhatsApp
+                <a href={waUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-btn bg-green-500/90 text-sm font-medium text-white hover:bg-green-500">
+                  <MessageCircle className="size-4" /> WhatsApp
                 </a>
               ) : (
-                <span className="text-sm text-danger">{t('app.invalidPhone')}</span>
+                <span className="inline-flex min-h-10 items-center justify-center rounded-btn bg-danger/20 text-sm text-red-100">{t('app.invalidPhone')}</span>
               )}
             </div>
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-sm text-ink-70">{t('booking.service')}</p>
-            <p className="font-medium">{locale === 'ar' ? b.service_name_ar : b.service_name_en}</p>
-            {b.extras?.length ? (
-              <ul className="mt-1 space-y-0.5 text-sm text-ink-70">
-                {b.extras.map((extra) => (
-                  <li key={extra.id}>
-                    + {locale === 'ar' ? extra.name_ar : extra.name_en} · {formatEGP(extra.price_egp)}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+        {/* الميعاد والخدمة */}
+        <Section title={L('الحجز', 'Appointment')}>
+          <Row label={L('الميعاد', 'When')}>
+            <span className="font-latin">{formatCairoDateShort(b.start_at)} · {formatCairoTime(b.start_at, locale)}</span>
+          </Row>
+          <div className="mt-1 border-t border-bark/10 pt-2">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-medium text-espresso">{isAr ? b.service_name_ar : b.service_name_en}</span>
+              <span className="font-latin text-ink-70">{formatEGP(Number(b.price_egp) - extrasTotal + (hasCoupon ? discount : 0))}</span>
+            </div>
+            {extrasList.map((extra) => (
+              <div key={extra.id} className="mt-1 flex items-center justify-between gap-3 text-sm text-ink-70">
+                <span>+ {isAr ? extra.name_ar : extra.name_en}</span>
+                <span className="font-latin">{formatEGP(extra.price_egp)}</span>
+              </div>
+            ))}
           </div>
-          <div>
-            <p className="text-sm text-ink-70">{t('booking.price')}</p>
-            {(() => {
-              // الكوبون والخصم بيتسجلوا على الحجز لو اتطبق
-              const extra = b as unknown as {
-                coupon_code?: string | null;
-                discount_egp?: number | null;
-                price_before_discount?: number | null;
-              };
-              const discount = Number(extra.discount_egp ?? 0);
-              if (!extra.coupon_code || discount <= 0) {
-                return <p className="font-medium font-latin">{formatEGP(b.price_egp)}</p>;
-              }
-              return (
-                <div className="space-y-0.5">
-                  <p className="text-sm text-ink-70 font-latin line-through">
-                    {formatEGP(Number(extra.price_before_discount ?? Number(b.price_egp) + discount))}
-                  </p>
-                  <p className="font-medium font-latin">{formatEGP(b.price_egp)}</p>
-                  <p className="text-sm font-medium text-success">
-                    {locale === 'ar' ? `كوبون ${extra.coupon_code} · خصم ` : `Coupon ${extra.coupon_code} · discount `}
-                    <span className="font-latin">{formatEGP(discount)}</span>
-                  </p>
-                </div>
-              );
-            })()}
-          </div>
-          <div>
-            <p className="text-sm text-ink-70">{t('booking.time')}</p>
-            <p className="font-medium font-latin">
-              {formatCairoDateShort(b.start_at)} — {formatCairoTime(b.start_at, locale)}
-            </p>
-          </div>
-        </div>
+          {b.notes?.trim() ? (
+            <div className="mt-2 rounded-btn bg-sand/50 p-2.5 text-sm">
+              <p className="mb-0.5 text-xs text-ink-70">{t('booking.notes')}</p>
+              <p className="whitespace-pre-wrap">{b.notes}</p>
+            </div>
+          ) : null}
+        </Section>
 
-        <div>
-          <p className="text-sm text-ink-70">{t('booking.notes')}</p>
-          <p className="text-sm whitespace-pre-wrap">{b.notes?.trim() ? b.notes : t('booking.noNotes')}</p>
-        </div>
+        {/* الدفع */}
+        <Section title={L('الدفع', 'Payment')}>
+          {hasCoupon ? (
+            <>
+              <Row label={L('قبل الخصم', 'Before discount')}>
+                <span className="font-latin text-ink-70 line-through">
+                  {formatEGP(Number(couponInfo.price_before_discount ?? Number(b.price_egp) + discount))}
+                </span>
+              </Row>
+              <Row label={L(`كوبون ${couponInfo.coupon_code}`, `Coupon ${couponInfo.coupon_code}`)}>
+                <span className="font-latin text-success">− {formatEGP(discount)}</span>
+              </Row>
+            </>
+          ) : null}
+          <Row label={L('الإجمالي', 'Total')}>
+            <span className="font-latin text-lg font-bold">{formatEGP(b.price_egp)}</span>
+          </Row>
+          {methodLabel(payment?.method) ? <Row label={L('الطريقة', 'Method')}>{methodLabel(payment?.method)}</Row> : null}
+          {payStatusLabel(payment?.status) ? <Row label={L('حالة الدفع', 'Payment status')}>{payStatusLabel(payment?.status)}</Row> : null}
 
-        {proofUrl ? (
-          <div>
-            <p className="mb-2 text-sm text-ink-70">{t('booking.proof')}</p>
-            <img src={proofUrl} alt={t('booking.proof')} className="max-h-48 rounded-btn object-contain" loading="lazy" />
-          </div>
-        ) : payment?.status === 'submitted' ? (
-          <div className="rounded-btn bg-sand/50 p-3 text-sm">
-            <p className="font-medium text-espresso">{t('payments.viaWhatsApp')}</p>
-            <p className="mt-1 text-ink-70">{t('payments.checkWhatsAppHint')}</p>
-            {waUrl ? (
-              <a href={waUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex">
-                <Button variant="secondary" size="sm">
-                  <MessageCircle className="size-4" />
-                  {t('payments.openCustomerWhatsApp')}
-                </Button>
-              </a>
-            ) : null}
-          </div>
-        ) : null}
+          {proofUrl ? (
+            <div className="mt-2">
+              <p className="mb-1 text-xs text-ink-70">{t('booking.proof')}</p>
+              <img src={proofUrl} alt={t('booking.proof')} className="max-h-48 rounded-btn object-contain" loading="lazy" />
+            </div>
+          ) : payment?.status === 'submitted' ? (
+            <div className="mt-2 rounded-btn bg-sand/50 p-3 text-sm">
+              <p className="font-medium text-espresso">{t('payments.viaWhatsApp')}</p>
+              <p className="mt-1 text-ink-70">{t('payments.checkWhatsAppHint')}</p>
+              {waUrl ? (
+                <a href={waUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex">
+                  <Button variant="secondary" size="sm">
+                    <MessageCircle className="size-4" />
+                    {t('payments.openCustomerWhatsApp')}
+                  </Button>
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+        </Section>
 
-        {(b.reviewed_at || b.cancelled_by) ? (
-          <div className="rounded-btn bg-sand/50 p-3 text-sm">
-            <p className="font-medium mb-1">{t('booking.auditHistory')}</p>
+        {(b.reviewed_at || b.cancelled_by || b.cancel_reason) ? (
+          <Section title={t('booking.auditHistory')}>
             {b.reviewed_at ? (
-              <p className="text-ink-70">
+              <p className="text-sm text-ink-70 font-latin">
                 {formatCairoDateShort(b.reviewed_at)} {formatCairoTime(b.reviewed_at, locale)}
               </p>
             ) : null}
-            {b.cancel_reason ? <p className="text-ink-70">{b.cancel_reason}</p> : null}
-          </div>
+            {b.cancel_reason ? <p className="text-sm text-ink-70">{b.cancel_reason}</p> : null}
+          </Section>
         ) : null}
 
         {offeredAt ? (
-          <div className="rounded-btn bg-sand/50 p-3 text-sm">
+          <div className="rounded-card border border-gold/40 bg-gold/10 p-3 text-sm">
             <p className="font-medium text-espresso">
               {t('booking.movePending', {
                 time: `${formatCairoDateShort(offeredAt)} ${formatCairoTime(offeredAt, locale)}`,
@@ -368,26 +392,32 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-2 pt-2">
+        {/* الإجراءات */}
+        <div className="space-y-2 pt-1">
           {payment?.status === 'submitted' ? (
-            <>
-              <Button
-                variant="primary"
-                size="lg"
-                loading={confirmPayment.isPending}
-                onClick={() => setConfirmAction('confirm')}
-              >
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="primary" size="lg" loading={confirmPayment.isPending} onClick={() => setConfirmAction('confirm')}>
                 {t('booking.confirmPayment')}
               </Button>
               <Button variant="danger" size="lg" onClick={() => setConfirmAction('reject')}>
                 {t('booking.rejectPayment')}
               </Button>
-            </>
+            </div>
           ) : null}
-          {b.status !== 'cancelled' && b.status !== 'completed' ? (
-            <>
+          {b.status === 'confirmed' ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => void setStatus.mutate({ id: b.id, status: 'completed' })}>
+                {t('booking.markCompleted')}
+              </Button>
+              <Button variant="secondary" onClick={() => void setStatus.mutate({ id: b.id, status: 'no_show' })}>
+                {t('booking.markNoShow')}
+              </Button>
+            </div>
+          ) : null}
+          {canAct ? (
+            <div className="grid grid-cols-2 gap-2">
               <Button
-                variant="secondary"
+                variant="ghost"
                 onClick={() => {
                   setMoveDate((d) => d || cairoDateString(new Date()));
                   setConfirmAction('move');
@@ -395,20 +425,10 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
               >
                 {t('booking.move')}
               </Button>
-              <Button variant="secondary" onClick={() => setConfirmAction('cancel')}>
+              <Button variant="ghost" className="text-danger" onClick={() => setConfirmAction('cancel')}>
                 {t('booking.cancel')}
               </Button>
-            </>
-          ) : null}
-          {b.status === 'confirmed' ? (
-            <>
-              <Button variant="secondary" onClick={() => void setStatus.mutate({ id: b.id, status: 'completed' })}>
-                {t('booking.markCompleted')}
-              </Button>
-              <Button variant="danger" onClick={() => void setStatus.mutate({ id: b.id, status: 'no_show' })}>
-                {t('booking.markNoShow')}
-              </Button>
-            </>
+            </div>
           ) : null}
         </div>
       </div>
