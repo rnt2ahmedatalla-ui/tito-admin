@@ -9,6 +9,7 @@ const RemindersPage = lazy(() => import('@/features/reminders/RemindersPage').th
 const BookingsPage = lazy(() => import('@/features/bookings/BookingsPage').then((m) => ({ default: m.BookingsPage })));
 const MorePage = lazy(() => import('@/features/more/MorePage').then((m) => ({ default: m.MorePage })));
 const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const CouponsPage = lazy(() => import('@/features/coupons/CouponsPage').then((m) => ({ default: m.CouponsPage })));
 const ServicesPage = lazy(() => import('@/features/services/ServicesPage').then((m) => ({ default: m.ServicesPage })));
 const HoursPage = lazy(() => import('@/features/hours/HoursPage').then((m) => ({ default: m.HoursPage })));
 const TimeOffPage = lazy(() => import('@/features/timeoff/TimeOffPage').then((m) => ({ default: m.TimeOffPage })));
@@ -50,6 +51,7 @@ export function AppRouter() {
           <Route path="more/walk-in" element={<Suspense fallback={<PageLoader />}><WalkInPage /></Suspense>} />
           <Route path="more/maintenance" element={<Suspense fallback={<PageLoader />}><MaintenancePage /></Suspense>} />
           <Route path="more/reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
+          <Route path="more/coupons" element={<Suspense fallback={<PageLoader />}><CouponsPage /></Suspense>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
