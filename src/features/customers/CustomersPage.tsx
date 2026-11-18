@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -282,6 +283,7 @@ export function CustomersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [blockTarget, setBlockTarget] = useState<CustomerSearchResult | null>(null);
   const [openCustomer, setOpenCustomer] = useState<CustomerSearchResult | null>(null);
+  const autoOpenedRef = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -315,6 +317,15 @@ export function CustomersPage() {
   });
 
   const customers = useMemo(() => data?.pages.flat() ?? [], [data]);
+
+  // لو جيت من التقارير (ومعاك ?q=)، التفاصيل بتتفتح على طول
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (!q || autoOpenedRef.current || customers.length === 0) return;
+    const match = customers.find((c) => (c.phone ?? '') === q || (c.full_name ?? '') === q) ?? customers[0];
+    autoOpenedRef.current = true;
+    setOpenCustomer(match);
+  }, [customers, searchParams]);
 
   const blockMutation = useMutation({
     mutationFn: async ({ id, blocked }: { id: string; blocked: boolean }) => {
