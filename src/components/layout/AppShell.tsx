@@ -24,7 +24,7 @@ const mainTabs = [
   { to: '/', icon: Calendar, labelKey: 'nav.today' },
   { to: '/payments', icon: CreditCard, labelKey: 'nav.payments', badge: true },
   { to: '/reminders', icon: Bell, labelKey: 'nav.reminders' },
-  { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
+  { to: '/bookings', icon: List, labelKey: 'nav.bookings', mobileHidden: true },
   { to: '/more', icon: MoreHorizontal, labelKey: 'nav.more' },
 ];
 
@@ -163,7 +163,7 @@ export function AppShell() {
           className="fixed inset-x-0 bottom-0 z-30 flex border-t border-bark/20 bg-espresso lg:hidden"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          {mainTabs.map((tab) => {
+          {mainTabs.filter((tab) => !tab.mobileHidden).map((tab) => {
             const Icon = tab.icon;
             const isActive =
               tab.to === '/'
