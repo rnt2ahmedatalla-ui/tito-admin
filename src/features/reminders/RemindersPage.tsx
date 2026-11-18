@@ -213,6 +213,12 @@ function labelForKind(kind: string, isAr: boolean): string {
   return isAr ? 'حجز جديد' : 'New booking';
 }
 
+function eventLabel(kind: string, isAr: boolean): string {
+  if (kind.includes('cancel')) return isAr ? 'اتلغى' : 'Cancelled';
+  if (kind.includes('move') || kind.includes('resched')) return isAr ? 'اتغير المعاد' : 'Rescheduled';
+  return isAr ? 'اتحجز' : 'Booked';
+}
+
 function NewBookingsSection() {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
@@ -308,7 +314,7 @@ function NewBookingsSection() {
                       </p>
                     ) : null}
                     <p className="mt-1 text-xs text-ink-70">
-                      {isAr ? 'اتحجز: ' : 'Booked: '}
+                      {eventLabel(n.kind ?? '', !!isAr)}: 
                       <span className="font-latin">
                         {formatCairoDateShort(n.created_at)} · {formatCairoTime(n.created_at, i18n.language)}
                       </span>
@@ -328,12 +334,16 @@ export function RemindersPage() {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
   return (
-    <div className="space-y-10">
-      <NewBookingsSection />
-      <section className="space-y-3">
-        <h2 className="text-lg font-bold text-espresso">{isAr ? 'التذكيرات' : 'Reminders'}</h2>
+    <div className="space-y-6">
+      <div className="rounded-card border border-gold/40 bg-white p-4 sm:p-5">
+        <NewBookingsSection />
+      </div>
+      <div className="rounded-card border border-default bg-sand/40 p-4 sm:p-5">
+        <p className="mb-4 text-xs font-medium uppercase tracking-[0.18em] text-gold font-latin">
+          {isAr ? 'رسائل واتساب قبل المعاد' : 'WhatsApp messages before appointments'}
+        </p>
         <RemindersSection />
-      </section>
+      </div>
     </div>
   );
 }
