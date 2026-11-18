@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, MessageCircle } from 'lucide-react';
@@ -8,7 +9,8 @@ import { supabase } from '@/lib/supabase';
 import type { BookingWithRelations, Settings } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { cairoDayBounds, formatCairoTime, formatCairoDateShort } from '@/lib/time';
+import { cairoDayBounds, cairoDateString, toCairo, formatCairoTime, formatCairoDateShort } from '@/lib/time';
+import { useAdminNotifications, type AdminNotification } from '@/hooks/useAdminNotifications';
 import { buildWhatsAppUrl, fillTemplate } from '@/lib/whatsapp';
 import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
@@ -16,7 +18,7 @@ import { first } from '@/lib/booking';
 
 type Tab = 'today' | 'tomorrow' | 'upcoming';
 
-export function RemindersPage() {
+function RemindersSection() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('upcoming');
@@ -192,6 +194,146 @@ export function RemindersPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+type NotifBooking = {
+  id: string;
+  start_at: string;
+  service_name_ar: string;
+  service_name_en: string;
+  guest_name: string | null;
+  profile: { full_name: string | null } | { full_name: string | null }[] | null;
+};
+
+function labelForKind(kind: string, isAr: boolean): string {
+  if (kind.includes('cancel')) return isAr ? 'إلغاء' : 'Cancelled';
+  if (kind.includes('move') || kind.includes('resched')) return isAr ? 'تغيير معاد' : 'Rescheduled';
+  return isAr ? 'حجز جديد' : 'New booking';
+}
+
+function NewBookingsSection() {
+  const { i18n } = useTranslation();
+  const navigate = useNavigate();
+  const isAr = i18n.language?.startsWith('ar');
+  const { data = [], unread, markOne } = useAdminNotifications();
+
+  const items: AdminNotification[] = useMemo(
+    () =>
+      data
+        .filter((n) => (n.kind ?? '').startsWith('booking') || n.entity === 'booking')
+        .slice(0, 40),
+    [data],
+  );
+
+  const ids = useMemo(
+    () => Array.from(new Set(items.map((n) => n.entity_id).filter((x): x is string => !!x))),
+    [items],
+  );
+
+  const bookingsQuery = useQuery({
+    queryKey: ['notif-bookings', ids],
+    enabled: ids.length > 0,
+    queryFn: async () => {
+      const { data: rows, error } = await supabase
+        .from('bookings')
+        .select('id, start_at, service_name_ar, service_name_en, guest_name, profile:profiles!bookings_user_id_fkey(full_name)')
+        .in('id', ids);
+      if (error) throw error;
+      return (rows ?? []) as unknown as NotifBooking[];
+    },
+    staleTime: 15_000,
+  });
+
+  const byId = useMemo(
+    () => new Map((bookingsQuery.data ?? []).map((b) => [b.id, b])),
+    [bookingsQuery.data],
+  );
+
+  const open = (n: AdminNotification) => {
+    if (!n.is_read) markOne.mutate(n.id);
+    const b = n.entity_id ? byId.get(n.entity_id) : undefined;
+    if (b) {
+      navigate(`/?date=${cairoDateString(toCairo(b.start_at))}&booking=${b.id}`);
+    } else {
+      navigate('/bookings');
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-espresso">{isAr ? 'الجديدة' : 'New'}</h2>
+        {unread > 0 ? (
+          <span className="rounded-full bg-gold px-2.5 py-0.5 text-xs font-semibold text-espresso">
+            {unread}
+          </span>
+        ) : null}
+      </div>
+
+      {items.length === 0 ? (
+        <p className="py-4 text-sm text-ink-70">{isAr ? 'مفيش حجوزات جديدة دلوقتي' : 'No new bookings right now'}</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((n) => {
+            const b = n.entity_id ? byId.get(n.entity_id) : undefined;
+            const name = (b ? first(b.profile)?.full_name || b.guest_name : null) || (isAr ? n.title_ar : n.title_en);
+            const service = b
+              ? isAr ? b.service_name_ar : b.service_name_en
+              : (isAr ? n.body_ar : n.body_en) ?? '';
+            return (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => open(n)}
+                  className={cn(
+                    'flex w-full items-start gap-3 rounded-card border p-4 text-start transition-colors hover:bg-sand/40',
+                    n.is_read ? 'border-default bg-white' : 'border-gold/50 bg-gold/10',
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {!n.is_read ? <span className="size-2 shrink-0 rounded-full bg-gold" aria-hidden /> : null}
+                      <p className="truncate font-semibold text-espresso">{name}</p>
+                      <span className="shrink-0 rounded-btn bg-sand px-2 py-0.5 text-[11px] text-ink-70">
+                        {labelForKind(n.kind ?? '', !!isAr)}
+                      </span>
+                    </div>
+                    {service ? <p className="mt-1 truncate text-sm text-ink-70">{service}</p> : null}
+                    {b ? (
+                      <p className="mt-1 text-sm font-latin text-espresso">
+                        {isAr ? 'الموعد: ' : 'Appointment: '}
+                        {formatCairoDateShort(b.start_at)} · {formatCairoTime(b.start_at, i18n.language)}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 text-xs text-ink-70">
+                      {isAr ? 'اتحجز: ' : 'Booked: '}
+                      <span className="font-latin">
+                        {formatCairoDateShort(n.created_at)} · {formatCairoTime(n.created_at, i18n.language)}
+                      </span>
+                    </p>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+export function RemindersPage() {
+  const { i18n } = useTranslation();
+  const isAr = i18n.language?.startsWith('ar');
+  return (
+    <div className="space-y-10">
+      <NewBookingsSection />
+      <section className="space-y-3">
+        <h2 className="text-lg font-bold text-espresso">{isAr ? 'التذكيرات' : 'Reminders'}</h2>
+        <RemindersSection />
+      </section>
     </div>
   );
 }
