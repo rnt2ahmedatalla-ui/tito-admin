@@ -2,17 +2,26 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, MessageCircle, Users } from 'lucide-react';
+import { Bell, Check, MessageCircle, Trash2, Users } from 'lucide-react';
 import { addDays } from 'date-fns';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import type { BookingWithRelations, CustomerSearchResult, Settings } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { cairoDayBounds, cairoDateString, toCairo, formatCairoTime, formatCairoDateShort } from '@/lib/time';
-import { useAdminNotifications, type AdminNotification } from '@/hooks/useAdminNotifications';
+import type { AdminNotification } from '@/hooks/useAdminNotifications';
+import {
+  BOOKING_LOG_PAGE,
+  fetchAllBookingNotifIds,
+  saveHiddenNotifs,
+  useBookingLog,
+  useHiddenNotifs,
+  useUnreadBookingCount,
+} from '@/hooks/useBookingLog';
 import { buildWhatsAppUrl, fillTemplate } from '@/lib/whatsapp';
 import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
@@ -258,18 +267,27 @@ function localizeReason(text: string, isAr: boolean): string {
 function NewBookingsSection() {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
-  const isAr = i18n.language?.startsWith('ar');
+  const isAr = !!i18n.language?.startsWith('ar');
+  const L = (ar: string, en: string) => (isAr ? ar : en);
   const queryClient = useQueryClient();
-  const { data = [], markOne } = useAdminNotifications();
+  const [pages, setPages] = useState(1);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
 
+  const hiddenQuery = useHiddenNotifs();
+  const hidden = useMemo(() => hiddenQuery.data ?? [], [hiddenQuery.data]);
+  const logQuery = useBookingLog(pages, hidden.length, hiddenQuery.isSuccess || hiddenQuery.isError);
+  const unreadCount = useUnreadBookingCount().data ?? 0;
+
+  const visibleAll = useMemo(() => {
+    const hiddenSet = new Set(hidden);
+    return (logQuery.data ?? []).filter((n) => !hiddenSet.has(n.id));
+  }, [logQuery.data, hidden]);
   const items: AdminNotification[] = useMemo(
-    () =>
-      data
-        .filter((n) => (n.kind ?? '').startsWith('booking') || n.entity === 'booking')
-        .slice(0, 40),
-    [data],
+    () => visibleAll.slice(0, pages * BOOKING_LOG_PAGE),
+    [visibleAll, pages],
   );
+  const hasMore = visibleAll.length > pages * BOOKING_LOG_PAGE;
 
   const ids = useMemo(
     () => Array.from(new Set(items.map((n) => n.entity_id).filter((x): x is string => !!x))),
@@ -295,6 +313,16 @@ function NewBookingsSection() {
     [bookingsQuery.data],
   );
 
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-notifications'] });
+  };
+
+  const markRead = async (list: string[]) => {
+    if (list.length === 0) return;
+    const { error } = await supabase.rpc('admin_mark_notifications_read', { p_ids: list });
+    if (!error) refresh();
+  };
+
   // أول ما تفتح التبويب: الجديد يفضل مميز، وبعد ثانية ونص يتعلّم كمقروء لوحده
   useEffect(() => {
     const unreadIds = items.filter((n) => !n.is_read).map((n) => n.id);
@@ -304,17 +332,42 @@ function NewBookingsSection() {
       unreadIds.forEach((id) => next.add(id));
       return next;
     });
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        const { error } = await supabase.rpc('admin_mark_notifications_read', { p_ids: unreadIds });
-        if (!error) void queryClient.invalidateQueries({ queryKey: ['admin-notifications'] });
-      })();
-    }, 1500);
+    const timer = window.setTimeout(() => void markRead(unreadIds), 1500);
     return () => window.clearTimeout(timer);
-  }, [items, queryClient]);
+  }, [items]);
+
+  const hideMutation = useMutation({
+    mutationFn: async (toHide: string[]) => {
+      await saveHiddenNotifs(Array.from(new Set([...hidden, ...toHide])));
+      await supabase.rpc('admin_mark_notifications_read', { p_ids: toHide });
+    },
+    onSuccess: refresh,
+    onError: () => toast.error(L('معرفتش أمسح، جرّب تاني', 'Could not remove, try again')),
+  });
+
+  const clearAll = async () => {
+    try {
+      const all = await fetchAllBookingNotifIds();
+      hideMutation.mutate(all);
+    } catch {
+      toast.error(L('معرفتش أمسح، جرّب تاني', 'Could not clear, try again'));
+    }
+    setConfirmClear(false);
+  };
+
+  const markAllRead = async () => {
+    try {
+      const all = await fetchAllBookingNotifIds();
+      const { error } = await supabase.rpc('admin_mark_notifications_read', { p_ids: all });
+      if (error) throw error;
+      refresh();
+    } catch {
+      toast.error(L('حصلت مشكلة، جرّب تاني', 'Something went wrong, try again'));
+    }
+  };
 
   const open = (n: AdminNotification) => {
-    if (!n.is_read) markOne.mutate(n.id);
+    if (!n.is_read) void markRead([n.id]);
     const b = n.entity_id ? byId.get(n.entity_id) : undefined;
     if (b) {
       navigate(`/?date=${cairoDateString(toCairo(b.start_at))}&booking=${b.id}`);
@@ -325,15 +378,38 @@ function NewBookingsSection() {
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-espresso">{isAr ? 'الجديدة' : 'New'}</h2>
-        <span className="text-xs text-ink-70">
-          {isAr ? 'سجل الحجوزات الجديدة والإلغاءات' : 'Log of new bookings and cancellations'}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-espresso">{L('الجديدة', 'New')}</h2>
+          {unreadCount > 0 ? (
+            <span className="rounded-full bg-gold px-2.5 py-0.5 font-latin text-xs font-bold text-espresso">
+              {unreadCount} {L('جديد', 'new')}
+            </span>
+          ) : null}
+        </div>
+        {items.length > 0 ? (
+          <div className="flex items-center gap-1">
+            {unreadCount > 0 ? (
+              <Button variant="ghost" size="sm" onClick={() => void markAllRead()}>
+                <Check className="size-4" aria-hidden />
+                {L('علّم الكل مقروء', 'Mark all read')}
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)}>
+              <Trash2 className="size-4" aria-hidden />
+              {L('امسح الكل', 'Clear all')}
+            </Button>
+          </div>
+        ) : null}
       </div>
+      <p className="text-xs text-ink-70">
+        {L('سجل الحجوزات الجديدة والإلغاءات، من الأحدث للأقدم', 'Log of new bookings and cancellations, newest first')}
+      </p>
 
-      {items.length === 0 ? (
-        <p className="py-4 text-sm text-ink-70">{isAr ? 'مفيش حجوزات جديدة دلوقتي' : 'No new bookings right now'}</p>
+      {logQuery.isLoading || hiddenQuery.isLoading ? (
+        <Skeleton className="h-32" />
+      ) : items.length === 0 ? (
+        <p className="py-4 text-sm text-ink-70">{L('مفيش حجوزات جديدة دلوقتي', 'No new bookings right now')}</p>
       ) : (
         <ul className="space-y-2">
           {items.map((n) => {
@@ -341,46 +417,73 @@ function NewBookingsSection() {
             const name = (b ? first(b.profile)?.full_name || b.guest_name : null) || (isAr ? n.title_ar : n.title_en);
             const service = b
               ? isAr ? b.service_name_ar : b.service_name_en
-              : localizeReason((isAr ? n.body_ar : n.body_en) ?? '', !!isAr);
+              : localizeReason((isAr ? n.body_ar : n.body_en) ?? '', isAr);
             const isNew = fresh.has(n.id) || !n.is_read;
             return (
-              <li key={n.id}>
+              <li
+                key={n.id}
+                className={cn(
+                  'flex items-stretch rounded-card border transition-colors',
+                  isNew ? 'border-gold/50 bg-gold/10' : 'border-default bg-white',
+                )}
+              >
                 <button
                   type="button"
                   onClick={() => open(n)}
-                  className={cn(
-                    'flex w-full items-start gap-3 rounded-card border p-4 text-start transition-colors hover:bg-sand/40',
-                    isNew ? 'border-gold/50 bg-gold/10' : 'border-default bg-white',
-                  )}
+                  className="min-w-0 flex-1 rounded-card p-4 text-start hover:bg-sand/40"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {isNew ? <span className="size-2 shrink-0 rounded-full bg-gold" aria-hidden /> : null}
-                      <p className="truncate font-semibold text-espresso">{name}</p>
-                      <span className="shrink-0 rounded-btn bg-sand px-2 py-0.5 text-[11px] text-ink-70">
-                        {labelForKind(n.kind ?? '', !!isAr)}
-                      </span>
-                    </div>
-                    {service ? <p className="mt-1 truncate text-sm text-ink-70">{service}</p> : null}
-                    {b ? (
-                      <p className="mt-1 text-sm font-latin text-espresso">
-                        {isAr ? 'الموعد: ' : 'Appointment: '}
-                        {formatCairoDateShort(b.start_at)} · {formatCairoTime(b.start_at, i18n.language)}
-                      </p>
-                    ) : null}
-                    <p className="mt-1 text-xs text-ink-70">
-                      {eventLabel(n.kind ?? '', !!isAr)}: 
-                      <span className="font-latin">
-                        {formatCairoDateShort(n.created_at)} · {formatCairoTime(n.created_at, i18n.language)}
-                      </span>
-                    </p>
+                  <div className="flex items-center gap-2">
+                    {isNew ? <span className="size-2 shrink-0 rounded-full bg-gold" aria-hidden /> : null}
+                    <p className="truncate font-semibold text-espresso">{name}</p>
+                    <span className="shrink-0 rounded-btn bg-sand px-2 py-0.5 text-[11px] text-ink-70">
+                      {labelForKind(n.kind ?? '', isAr)}
+                    </span>
                   </div>
+                  {service ? <p className="mt-1 truncate text-sm text-ink-70">{service}</p> : null}
+                  {b ? (
+                    <p className="mt-1 text-sm font-latin text-espresso">
+                      {L('الموعد: ', 'Appointment: ')}
+                      {formatCairoDateShort(b.start_at)} · {formatCairoTime(b.start_at, i18n.language)}
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-xs text-ink-70">
+                    {eventLabel(n.kind ?? '', isAr)}:{' '}
+                    <span className="font-latin">
+                      {formatCairoDateShort(n.created_at)} · {formatCairoTime(n.created_at, i18n.language)}
+                    </span>
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => hideMutation.mutate([n.id])}
+                  disabled={hideMutation.isPending}
+                  aria-label={L('امسح الإشعار', 'Remove notification')}
+                  title={L('امسح', 'Remove')}
+                  className="m-1 flex size-10 shrink-0 items-center justify-center self-start rounded-btn text-ink-70 hover:bg-danger/10 hover:text-danger"
+                >
+                  <Trash2 className="size-4" aria-hidden />
                 </button>
               </li>
             );
           })}
         </ul>
       )}
+
+      {hasMore ? (
+        <Button variant="secondary" className="w-full" onClick={() => setPages((n) => n + 1)}>
+          {L('عرض المزيد', 'Show more')}
+        </Button>
+      ) : null}
+
+      <ConfirmDialog
+        open={confirmClear}
+        title={L('تمسح كل الإشعارات؟', 'Clear all notifications?')}
+        message={L('هيتخبّى السجل كله. الحجوزات نفسها مش هتتأثر.', 'The whole log will be hidden. Bookings themselves are unaffected.')}
+        variant="danger"
+        loading={hideMutation.isPending}
+        onConfirm={() => void clearAll()}
+        onCancel={() => setConfirmClear(false)}
+      />
     </section>
   );
 }
@@ -429,6 +532,8 @@ function InactiveSection() {
   const L = (ar: string, en: string) => (isAr ? ar : en);
   const [range, setRange] = useState<Range>(readRange);
   const [contacted, setContacted] = useState<Record<string, string>>(readContacted);
+  const [sentFilter, setSentFilter] = useState<'all' | 'unsent' | 'sent'>('unsent');
+  const [shown, setShown] = useState(60);
   const [editOpen, setEditOpen] = useState(false);
   const [draftAr, setDraftAr] = useState(DEFAULT_MESSAGE_AR);
   const [draftEn, setDraftEn] = useState(DEFAULT_MESSAGE_EN);
@@ -549,6 +654,16 @@ function InactiveSection() {
       .filter((x) => x.away >= daysNum && (upperLimit === null || x.away <= upperLimit))
       .sort((a, b) => b.away - a.away);
   }, [customersQuery.data, upcomingQuery.data, daysNum, upperLimit]);
+
+  const counts = useMemo(() => {
+    const sent = list.filter(({ c }) => !!contacted[c.id]).length;
+    return { all: list.length, sent, unsent: list.length - sent };
+  }, [list, contacted]);
+  const filtered = useMemo(() => {
+    if (sentFilter === 'unsent') return list.filter(({ c }) => !contacted[c.id]);
+    if (sentFilter === 'sent') return list.filter(({ c }) => !!contacted[c.id]);
+    return list;
+  }, [list, contacted, sentFilter]);
 
   const shopName = settingsQuery.data?.shop_name || 'tito';
   const bookLink = `${CUSTOMER_URL}/book`;
@@ -744,11 +859,26 @@ function InactiveSection() {
         </p>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-ink-70">
-            <span className="font-latin font-semibold text-espresso">{list.length}</span> {L('عميل', 'customers')}
-          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant={sentFilter === 'all' ? 'primary' : 'ghost'} size="sm" onClick={() => setSentFilter('all')}>
+              {L('الكل', 'All')} <span className="font-latin">({counts.all})</span>
+            </Button>
+            <Button variant={sentFilter === 'unsent' ? 'primary' : 'ghost'} size="sm" onClick={() => setSentFilter('unsent')}>
+              {L('لسه ما اتبعتلوش', 'Not messaged yet')} <span className="font-latin">({counts.unsent})</span>
+            </Button>
+            <Button variant={sentFilter === 'sent' ? 'primary' : 'ghost'} size="sm" onClick={() => setSentFilter('sent')}>
+              {L('اتبعتلهم', 'Messaged')} <span className="font-latin">({counts.sent})</span>
+            </Button>
+          </div>
+          {filtered.length === 0 ? (
+            <p className="py-6 text-center text-sm text-ink-70">
+              {sentFilter === 'unsent'
+                ? L('كلهم اتبعتلهم، تمام ✅', 'Everyone has been messaged ✅')
+                : L('مفيش حد هنا', 'Nobody here')}
+            </p>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {list.slice(0, 100).map(({ c, away }) => {
+          {filtered.slice(0, shown).map(({ c, away }) => {
             const doneAt = contacted[c.id];
             return (
               <div key={c.id} className="rounded-card border border-default bg-white p-4">
@@ -783,10 +913,10 @@ function InactiveSection() {
             );
           })}
           </div>
-          {list.length > 100 ? (
-            <p className="text-center text-xs text-ink-70">
-              {L('بنعرض أول 100 عميل بس', 'Showing the first 100 customers only')}
-            </p>
+          {filtered.length > shown ? (
+            <Button variant="secondary" className="w-full" onClick={() => setShown((n) => n + 60)}>
+              {L('عرض المزيد', 'Show more')}
+            </Button>
           ) : null}
         </div>
       )}
@@ -798,9 +928,10 @@ export function RemindersPage() {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
   const [section, setSection] = useState<'new' | 'reminders' | 'inactive'>('new');
+  const unreadNew = useUnreadBookingCount().data ?? 0;
 
   const tabs = [
-    { key: 'new' as const, label: isAr ? 'الجديدة' : 'New', icon: Bell, badge: 0 },
+    { key: 'new' as const, label: isAr ? 'الجديدة' : 'New', icon: Bell, badge: unreadNew },
     { key: 'reminders' as const, label: isAr ? 'التذكيرات' : 'Reminders', icon: MessageCircle, badge: 0 },
     { key: 'inactive' as const, label: isAr ? 'الغايبين' : 'Inactive', icon: Users, badge: 0 },
   ];
