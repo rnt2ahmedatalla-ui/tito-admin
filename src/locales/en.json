@@ -39,6 +39,7 @@
     "payments": "Payments",
     "reminders": "Reminders",
     "bookings": "Bookings",
+    "reports": "Reports",
     "more": "More",
     "services": "Services",
     "hours": "Working hours",
@@ -57,7 +58,7 @@
     "completed": "Completed",
     "cancelled": "Cancelled",
     "expired": "Expired",
-    "no_show": "No show"
+    "no_show": "Did not come"
   },
   "today": {
     "title": "Today",
@@ -80,11 +81,6 @@
     "emptySlot": "Available slot"
   },
   "payments": {
-    "boxesTitle": "Boxes",
-    "boxesHint": "Your total income for the selected period, split into your boxes",
-    "boxRemainder": "Remaining",
-    "boxesEmpty": "No boxes yet.",
-    "boxesEditLink": "Add them in Settings",
     "title": "Payments",
     "empty": "No payments waiting",
     "confirm": "Confirm transfer",
@@ -104,10 +100,7 @@
     "productBadge": "Product",
     "productAwaitingPay": "Still waiting for payment proof",
     "sendConfirmWhatsApp": "Send confirmation on WhatsApp",
-    "confirmWhatsAppOpened": "WhatsApp opened with confirmation message",
-    "tabQueue": "Pending",
-    "tabFinance": "My finances",
-    "todayTitle": "Today"
+    "confirmWhatsAppOpened": "WhatsApp opened with confirmation message"
   },
   "reminders": {
     "title": "Reminders",
@@ -285,17 +278,6 @@
     "openAction": "Tap to open"
   },
   "settings": {
-    "financeBoxes": "Finance boxes",
-    "financeBoxesHint": "Choose how many boxes, each name and its percentage of the total. The remainder is calculated automatically.",
-    "boxName": "Box name",
-    "boxPct": "Percent %",
-    "addBox": "Add box",
-    "removeBox": "Remove box",
-    "boxesSum": "Total percent",
-    "boxesOver100": "Total is over 100%. Adjust it to be able to save.",
-    "boxesNone": "No boxes yet. Tap Add box.",
-    "boxesSaved": "Boxes saved",
-    "boxesSetupNeeded": "Boxes need a one-time database setup (SQL). Ask whoever maintains the site.",
     "title": "Settings",
     "booking": "Booking",
     "payment": "Payment",
