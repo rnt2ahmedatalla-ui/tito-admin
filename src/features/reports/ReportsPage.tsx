@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -35,6 +36,7 @@ function todayStr(offsetDays = 0): string {
 
 export function ReportsPage() {
   const { i18n } = useTranslation();
+  const navigate = useNavigate();
   const isAr = i18n.language?.startsWith('ar');
 
   const [from, setFrom] = useState(todayStr(-29));
@@ -224,11 +226,17 @@ export function ReportsPage() {
 
       <Block title={isAr ? 'أكتر العملاء زيارة' : 'Top customers by visits'}>
         {customers.length === 0 ? empty : customers.map((c, i) => (
-          <Line
+          <button
             key={`${c.phone}-${i}`}
-            left={`${i + 1}. ${c.name}${c.phone ? ` · ${c.phone}` : ''}`}
-            right={isAr ? `${c.visits} زيارة · ${formatEGP(c.spent)}` : `${c.visits} visits · ${formatEGP(c.spent)}`}
-          />
+            type="button"
+            onClick={() => navigate(`/more/customers?q=${encodeURIComponent(c.phone || c.name)}`)}
+            className="block w-full text-start hover:bg-sand/40"
+          >
+            <Line
+              left={`${i + 1}. ${c.name}${c.phone ? ` · ${c.phone}` : ''}`}
+              right={isAr ? `${c.visits} زيارة · ${formatEGP(c.spent)}` : `${c.visits} visits · ${formatEGP(c.spent)}`}
+            />
+          </button>
         ))}
       </Block>
 
