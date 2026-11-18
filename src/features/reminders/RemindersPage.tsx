@@ -249,11 +249,19 @@ function eventLabel(kind: string, isAr: boolean): string {
   return isAr ? 'اتحجز' : 'Booked';
 }
 
+function localizeReason(text: string, isAr: boolean): string {
+  return text
+    .replace(/cancelled by admin/gi, isAr ? 'اتلغى من المحل' : 'cancelled by the shop')
+    .replace(/cancelled by customer/gi, isAr ? 'العميل لغى الحجز' : 'cancelled by the customer');
+}
+
 function NewBookingsSection() {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const isAr = i18n.language?.startsWith('ar');
-  const { data = [], unread, markOne } = useAdminNotifications();
+  const queryClient = useQueryClient();
+  const { data = [], markOne } = useAdminNotifications();
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
 
   const items: AdminNotification[] = useMemo(
     () =>
@@ -287,6 +295,24 @@ function NewBookingsSection() {
     [bookingsQuery.data],
   );
 
+  // أول ما تفتح التبويب: الجديد يفضل مميز، وبعد ثانية ونص يتعلّم كمقروء لوحده
+  useEffect(() => {
+    const unreadIds = items.filter((n) => !n.is_read).map((n) => n.id);
+    if (unreadIds.length === 0) return undefined;
+    setFresh((prev) => {
+      const next = new Set(prev);
+      unreadIds.forEach((id) => next.add(id));
+      return next;
+    });
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const { error } = await supabase.rpc('admin_mark_notifications_read', { p_ids: unreadIds });
+        if (!error) void queryClient.invalidateQueries({ queryKey: ['admin-notifications'] });
+      })();
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [items, queryClient]);
+
   const open = (n: AdminNotification) => {
     if (!n.is_read) markOne.mutate(n.id);
     const b = n.entity_id ? byId.get(n.entity_id) : undefined;
@@ -301,11 +327,9 @@ function NewBookingsSection() {
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-espresso">{isAr ? 'الجديدة' : 'New'}</h2>
-        {unread > 0 ? (
-          <span className="rounded-full bg-gold px-2.5 py-0.5 text-xs font-semibold text-espresso">
-            {unread}
-          </span>
-        ) : null}
+        <span className="text-xs text-ink-70">
+          {isAr ? 'سجل الحجوزات الجديدة والإلغاءات' : 'Log of new bookings and cancellations'}
+        </span>
       </div>
 
       {items.length === 0 ? (
@@ -317,7 +341,8 @@ function NewBookingsSection() {
             const name = (b ? first(b.profile)?.full_name || b.guest_name : null) || (isAr ? n.title_ar : n.title_en);
             const service = b
               ? isAr ? b.service_name_ar : b.service_name_en
-              : (isAr ? n.body_ar : n.body_en) ?? '';
+              : localizeReason((isAr ? n.body_ar : n.body_en) ?? '', !!isAr);
+            const isNew = fresh.has(n.id) || !n.is_read;
             return (
               <li key={n.id}>
                 <button
@@ -325,12 +350,12 @@ function NewBookingsSection() {
                   onClick={() => open(n)}
                   className={cn(
                     'flex w-full items-start gap-3 rounded-card border p-4 text-start transition-colors hover:bg-sand/40',
-                    n.is_read ? 'border-default bg-white' : 'border-gold/50 bg-gold/10',
+                    isNew ? 'border-gold/50 bg-gold/10' : 'border-default bg-white',
                   )}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      {!n.is_read ? <span className="size-2 shrink-0 rounded-full bg-gold" aria-hidden /> : null}
+                      {isNew ? <span className="size-2 shrink-0 rounded-full bg-gold" aria-hidden /> : null}
                       <p className="truncate font-semibold text-espresso">{name}</p>
                       <span className="shrink-0 rounded-btn bg-sand px-2 py-0.5 text-[11px] text-ink-70">
                         {labelForKind(n.kind ?? '', !!isAr)}
@@ -722,6 +747,7 @@ function InactiveSection() {
           <p className="text-sm text-ink-70">
             <span className="font-latin font-semibold text-espresso">{list.length}</span> {L('عميل', 'customers')}
           </p>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {list.slice(0, 100).map(({ c, away }) => {
             const doneAt = contacted[c.id];
             return (
@@ -756,6 +782,7 @@ function InactiveSection() {
               </div>
             );
           })}
+          </div>
           {list.length > 100 ? (
             <p className="text-center text-xs text-ink-70">
               {L('بنعرض أول 100 عميل بس', 'Showing the first 100 customers only')}
@@ -771,10 +798,9 @@ export function RemindersPage() {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
   const [section, setSection] = useState<'new' | 'reminders' | 'inactive'>('new');
-  const { unread } = useAdminNotifications();
 
   const tabs = [
-    { key: 'new' as const, label: isAr ? 'الجديدة' : 'New', icon: Bell, badge: unread },
+    { key: 'new' as const, label: isAr ? 'الجديدة' : 'New', icon: Bell, badge: 0 },
     { key: 'reminders' as const, label: isAr ? 'التذكيرات' : 'Reminders', icon: MessageCircle, badge: 0 },
     { key: 'inactive' as const, label: isAr ? 'الغايبين' : 'Inactive', icon: Users, badge: 0 },
   ];
