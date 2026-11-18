@@ -101,7 +101,13 @@
     "productBadge": "Product",
     "productAwaitingPay": "Still waiting for payment proof",
     "sendConfirmWhatsApp": "Send confirmation on WhatsApp",
-    "confirmWhatsAppOpened": "WhatsApp opened with confirmation message"
+    "confirmWhatsAppOpened": "WhatsApp opened with confirmation message",
+    "tabFinance": "Finance summary",
+    "tabQueue": "Pending payments",
+    "todayTitle": "Today",
+    "boxesTitle": "Boxes",
+    "boxesHint": "Split income into boxes by percentage; the remainder is calculated automatically.",
+    "boxRemainder": "Remainder"
   },
   "reminders": {
     "title": "Reminders",
@@ -212,8 +218,24 @@
     "close": "Close",
     "lastSlot": "Last slot start",
     "preview": "{{count}} slots on this day",
-    "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-    "shortDays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    "days": [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "shortDays": [
+      "Sun",
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat"
+    ]
   },
   "timeOff": {
     "title": "Time off",
