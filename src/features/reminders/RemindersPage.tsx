@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 import type { BookingWithRelations, CustomerSearchResult, Settings } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Input } from '@/components/ui/Input';
+import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { cairoDayBounds, cairoDateString, toCairo, formatCairoTime, formatCairoDateShort } from '@/lib/time';
 import { useAdminNotifications, type AdminNotification } from '@/hooks/useAdminNotifications';
 import { buildWhatsAppUrl, fillTemplate } from '@/lib/whatsapp';
@@ -360,8 +362,17 @@ function NewBookingsSection() {
 
 
 const CUSTOMER_URL = import.meta.env.VITE_CUSTOMER_URL || 'https://tito-customer.vercel.app';
-const INACTIVE_OPTIONS = [7, 15, 30, 60];
+const QUICK_DAYS = [7, 15, 30, 60];
 const CONTACTED_KEY = 'tito.inactive.contacted';
+const RANGE_KEY = 'tito.inactive.range';
+const PREF_KEY = 'inactive_message';
+
+const DEFAULT_MESSAGE_AR =
+  'أهلاً {name} 👋\nوحشتنا في {shop}! بقالك {days} يوم ما زرتناش. تحب نحجزلك معاد؟\nتقدر تحجز من هنا: {link}';
+const DEFAULT_MESSAGE_EN =
+  'Hi {name} 👋\nWe miss you at {shop}! It has been {days} days since your last visit. Would you like to book your next appointment?\nBook here: {link}';
+
+type Range = { days: string; to: string };
 
 function readContacted(): Record<string, string> {
   try {
@@ -373,12 +384,44 @@ function readContacted(): Record<string, string> {
   }
 }
 
+function readRange(): Range {
+  try {
+    const raw = window.localStorage.getItem(RANGE_KEY);
+    const p = (raw ? JSON.parse(raw) : {}) as { days?: unknown; to?: unknown };
+    return {
+      days: typeof p.days === 'string' && p.days ? p.days : '15',
+      to: typeof p.to === 'string' ? p.to : '',
+    };
+  } catch {
+    return { days: '15', to: '' };
+  }
+}
+
 function InactiveSection() {
   const { i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const isAr = !!i18n.language?.startsWith('ar');
   const L = (ar: string, en: string) => (isAr ? ar : en);
-  const [days, setDays] = useState(15);
+  const [range, setRange] = useState<Range>(readRange);
   const [contacted, setContacted] = useState<Record<string, string>>(readContacted);
+  const [editOpen, setEditOpen] = useState(false);
+  const [draftAr, setDraftAr] = useState(DEFAULT_MESSAGE_AR);
+  const [draftEn, setDraftEn] = useState(DEFAULT_MESSAGE_EN);
+
+  const updateRange = (next: Range) => {
+    setRange(next);
+    try {
+      window.localStorage.setItem(RANGE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const daysNum = Math.max(1, parseInt(range.days, 10) || 1);
+  const toParsed = range.to.trim() === '' ? null : parseInt(range.to, 10);
+  const toNum = toParsed !== null && Number.isFinite(toParsed) ? toParsed : null;
+  const toInvalid = toNum !== null && toNum < daysNum;
+  const upperLimit = toNum !== null && !toInvalid ? toNum : null;
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
@@ -388,6 +431,51 @@ function InactiveSection() {
       return data as Settings;
     },
     staleTime: 60_000,
+  });
+
+  // نص الرسالة المحفوظ على حساب الأدمن
+  const messageQuery = useQuery({
+    queryKey: ['inactive-message'],
+    queryFn: async () => {
+      const { data, error } = await untypedDb
+        .from('admin_prefs')
+        .select('value')
+        .eq('key', PREF_KEY)
+        .maybeSingle();
+      if (error) throw error;
+      const v = ((data as { value?: Record<string, unknown> } | null)?.value ?? {}) as Record<string, unknown>;
+      const ar = typeof v.message_ar === 'string' && v.message_ar.trim() ? v.message_ar : DEFAULT_MESSAGE_AR;
+      const en = typeof v.message_en === 'string' && v.message_en.trim() ? v.message_en : DEFAULT_MESSAGE_EN;
+      return { ar, en };
+    },
+    retry: false,
+    staleTime: 60_000,
+  });
+  const templateAr = messageQuery.data?.ar ?? DEFAULT_MESSAGE_AR;
+  const templateEn = messageQuery.data?.en ?? DEFAULT_MESSAGE_EN;
+
+  useEffect(() => {
+    if (messageQuery.data) {
+      setDraftAr(messageQuery.data.ar);
+      setDraftEn(messageQuery.data.en);
+    }
+  }, [messageQuery.data]);
+
+  const saveMessage = useMutation({
+    mutationFn: async () => {
+      const { error } = await untypedDb.from('admin_prefs').upsert({
+        key: PREF_KEY,
+        value: { message_ar: draftAr.trim(), message_en: draftEn.trim() },
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['inactive-message'] });
+      toast.success(L('اتحفظت الرسالة', 'Message saved'));
+      setEditOpen(false);
+    },
+    onError: () => toast.error(L('مقدرتش أحفظ الرسالة', 'Could not save the message')),
   });
 
   // كل العملاء (الدالة بترجع آخر زيارة لكل عميل)
@@ -433,17 +521,17 @@ function InactiveSection() {
     return (customersQuery.data ?? [])
       .filter((c) => !c.is_blocked && !!c.phone && !!c.last_visit && !upcoming.has(c.id))
       .map((c) => ({ c, away: Math.floor((now - new Date(c.last_visit as string).getTime()) / 86_400_000) }))
-      .filter((x) => x.away >= days)
+      .filter((x) => x.away >= daysNum && (upperLimit === null || x.away <= upperLimit))
       .sort((a, b) => b.away - a.away);
-  }, [customersQuery.data, upcomingQuery.data, days]);
+  }, [customersQuery.data, upcomingQuery.data, daysNum, upperLimit]);
+
+  const shopName = settingsQuery.data?.shop_name || 'tito';
+  const bookLink = `${CUSTOMER_URL}/book`;
+  const buildText = (template: string, name: string, away: number) =>
+    fillTemplate(template, { name, days: String(away), shop: shopName, link: bookLink });
 
   const sendMessage = (c: CustomerSearchResult, away: number) => {
-    const shop = settingsQuery.data?.shop_name || 'tito';
-    const link = `${CUSTOMER_URL}/book`;
-    const name = c.full_name || '';
-    const message = isAr
-      ? `أهلاً ${name} 👋\nوحشتنا في ${shop}! بقالك ${away} يوم ما زرتناش. تحب نحجزلك معاد؟\nتقدر تحجز من هنا: ${link}`
-      : `Hi ${name} 👋\nWe miss you at ${shop}! It has been ${away} days since your last visit. Would you like to book your next appointment?\nBook here: ${link}`;
+    const message = buildText(isAr ? templateAr : templateEn, c.full_name || '', away);
     const url = buildWhatsAppUrl(c.phone ?? '', message);
     if (!url) {
       toast.error(L('العميل مفيش عنده رقم واتساب صالح', 'This customer has no valid WhatsApp number'));
@@ -460,6 +548,12 @@ function InactiveSection() {
   };
 
   const isLoading = customersQuery.isLoading || upcomingQuery.isLoading;
+  const previewTemplate = isAr ? draftAr : draftEn;
+  const previewText = buildText(
+    previewTemplate,
+    list[0]?.c.full_name || L('أحمد', 'Ahmed'),
+    list[0]?.away ?? daysNum,
+  );
 
   return (
     <div className="space-y-4">
@@ -474,13 +568,145 @@ function InactiveSection() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-ink-70">{L('بقالهم', 'Away for')}</span>
-        {INACTIVE_OPTIONS.map((n) => (
-          <Button key={n} variant={days === n ? 'primary' : 'ghost'} size="sm" onClick={() => setDays(n)}>
-            <span className="font-latin">{n}</span> {L('يوم أو أكتر', 'days or more')}
+      {/* المدة */}
+      <div className="space-y-3 rounded-card border border-default bg-sand/30 p-3">
+        <p className="text-sm font-semibold text-espresso">{L('المدة من آخر زيارة', 'Time since last visit')}</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-28">
+            <Input
+              id="inactive-days"
+              label={L('من (يوم)', 'From (days)')}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              value={range.days}
+              onChange={(e) => updateRange({ ...range, days: e.target.value })}
+            />
+          </div>
+          <div className="w-28">
+            <Input
+              id="inactive-days-to"
+              label={L('لحد (اختياري)', 'To (optional)')}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              value={range.to}
+              onChange={(e) => updateRange({ ...range, to: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {QUICK_DAYS.map((n) => (
+            <Button
+              key={n}
+              variant={daysNum === n && range.to === '' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => updateRange({ days: String(n), to: '' })}
+            >
+              <span className="font-latin">{n}</span>+
+            </Button>
+          ))}
+        </div>
+        <p className="text-xs text-ink-70">
+          {upperLimit !== null
+            ? L(
+                `بنعرض اللي غابوا من ${daysNum} لحد ${upperLimit} يوم.`,
+                `Showing customers away between ${daysNum} and ${upperLimit} days.`,
+              )
+            : L(`بنعرض اللي غابوا ${daysNum} يوم أو أكتر.`, `Showing customers away ${daysNum} days or more.`)}
+        </p>
+        {toInvalid ? (
+          <p className="text-xs text-danger" role="alert">
+            {L('رقم "لحد" لازم يبقى أكبر من أو يساوي رقم "من".', '"To" must be greater than or equal to "From".')}
+          </p>
+        ) : null}
+      </div>
+
+      {/* نص الرسالة */}
+      <div className="rounded-card border border-default p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-espresso">{L('نص الرسالة', 'Message text')}</p>
+          <Button variant="secondary" size="sm" onClick={() => setEditOpen((v) => !v)}>
+            {editOpen ? L('إغلاق', 'Close') : L('تعديل الرسالة', 'Edit message')}
           </Button>
-        ))}
+        </div>
+
+        {editOpen ? (
+          <div className="mt-3 space-y-3">
+            {messageQuery.isError ? (
+              <p className="rounded-btn bg-sand/50 p-3 text-sm text-ink">
+                {L(
+                  'حفظ الرسالة محتاج تجهيز لمرة واحدة في قاعدة البيانات (كود SQL).',
+                  'Saving the message needs a one-time database setup (SQL).',
+                )}
+              </p>
+            ) : null}
+            <p className="text-xs text-ink-70">
+              {L('كلمات بتتبدل لوحدها لكل عميل:', 'Words that are replaced automatically for each customer:')}{' '}
+              <code className="font-latin">{'{name}'}</code> {L('الاسم', 'name')} ·{' '}
+              <code className="font-latin">{'{days}'}</code> {L('عدد الأيام', 'days')} ·{' '}
+              <code className="font-latin">{'{shop}'}</code> {L('اسم المحل', 'shop')} ·{' '}
+              <code className="font-latin">{'{link}'}</code> {L('لينك الحجز', 'booking link')}
+            </p>
+            <div>
+              <label htmlFor="inactive-msg-ar" className="text-sm font-medium text-ink-70">
+                {L('الرسالة بالعربي', 'Arabic message')}
+              </label>
+              <textarea
+                id="inactive-msg-ar"
+                rows={5}
+                maxLength={600}
+                className="mt-1 w-full rounded-btn border border-bark/20 bg-white p-3 text-sm text-espresso"
+                value={draftAr}
+                onChange={(e) => setDraftAr(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="inactive-msg-en" className="text-sm font-medium text-ink-70">
+                {L('الرسالة بالإنجليزي', 'English message')}
+              </label>
+              <textarea
+                id="inactive-msg-en"
+                rows={5}
+                maxLength={600}
+                className="mt-1 w-full rounded-btn border border-bark/20 bg-white p-3 text-sm text-espresso"
+                value={draftEn}
+                onChange={(e) => setDraftEn(e.target.value)}
+              />
+            </div>
+            <p className="text-xs text-ink-70">
+              {L(
+                'الرسالة بتتبعت بلغة واجهة الأدمن الحالية.',
+                'The message is sent in the current admin interface language.',
+              )}
+            </p>
+            <div className="rounded-btn bg-sand/40 p-3">
+              <p className="mb-1 text-xs font-medium text-ink-70">{L('معاينة', 'Preview')}</p>
+              <p className="whitespace-pre-line text-sm text-espresso">{previewText}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                onClick={() => saveMessage.mutate()}
+                loading={saveMessage.isPending}
+                disabled={!draftAr.trim() || !draftEn.trim()}
+              >
+                {L('حفظ الرسالة', 'Save message')}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setDraftAr(DEFAULT_MESSAGE_AR);
+                  setDraftEn(DEFAULT_MESSAGE_EN);
+                }}
+              >
+                {L('رجّع الرسالة الأصلية', 'Restore default')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 line-clamp-2 whitespace-pre-line text-sm text-ink-70">{isAr ? templateAr : templateEn}</p>
+        )}
       </div>
 
       {isLoading ? (
