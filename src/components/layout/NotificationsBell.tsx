@@ -2,12 +2,14 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, ChevronLeft } from 'lucide-react';
+import { Bell, ChevronRight } from 'lucide-react';
 import {
   notificationHref,
   useAdminNotifications,
 } from '@/hooks/useAdminNotifications';
 import { cn } from '@/lib/cn';
+import { supabase } from '@/lib/supabase';
+import { cairoDateString, toCairo } from '@/lib/time';
 
 const DESKTOP_BREAKPOINT = 1024;
 const PANEL_WIDTH = 384;
@@ -36,10 +38,24 @@ export function NotificationsBell() {
     setOpen((v) => !v);
   };
 
-  const openItem = (id: string, kind: string, entity: string | null) => {
+  const openItem = async (id: string, kind: string, entity: string | null) => {
     setOpen(false);
-    if (!data.find((n) => n.id === id)?.is_read) {
+    const item = data.find((n) => n.id === id);
+    if (item && !item.is_read) {
       void markOne.mutate(id);
+    }
+    // إشعار حجز: يفتح اليوم والحجز نفسه
+    const isBooking = (kind ?? '').startsWith('booking') || entity === 'booking';
+    if (isBooking && item?.entity_id) {
+      const { data: row } = await supabase
+        .from('bookings')
+        .select('id, start_at')
+        .eq('id', item.entity_id)
+        .maybeSingle();
+      if (row?.start_at) {
+        navigate(`/?date=${cairoDateString(toCairo(row.start_at))}&booking=${row.id}`);
+        return;
+      }
     }
     navigate(notificationHref({ kind, entity }));
   };
@@ -79,7 +95,7 @@ export function NotificationsBell() {
                     'flex w-full items-start gap-3 px-4 py-3.5 text-start transition-colors hover:bg-sand/50',
                     !n.is_read && 'bg-gold/10',
                   )}
-                  onClick={() => openItem(n.id, n.kind, n.entity)}
+                  onClick={() => void openItem(n.id, n.kind, n.entity)}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
@@ -99,7 +115,7 @@ export function NotificationsBell() {
                       {t('notifications.openAction')}
                     </span>
                   </span>
-                  <ChevronLeft className="mt-1 size-4 shrink-0 text-ink-70 rtl:-scale-x-100" aria-hidden />
+                  <ChevronRight className="mt-1 size-4 shrink-0 text-ink-70 rtl:-scale-x-100" aria-hidden />
                 </button>
               </li>
             ))

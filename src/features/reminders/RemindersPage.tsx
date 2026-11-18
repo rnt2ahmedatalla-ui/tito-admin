@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, MessageCircle } from 'lucide-react';
+import { Bell, Check, MessageCircle, Users } from 'lucide-react';
 import { addDays } from 'date-fns';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import type { BookingWithRelations, Settings } from '@/types/database';
+import type { BookingWithRelations, CustomerSearchResult, Settings } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cairoDayBounds, cairoDateString, toCairo, formatCairoTime, formatCairoDateShort } from '@/lib/time';
@@ -22,7 +22,7 @@ function RemindersSection() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('upcoming');
-  const [notSentOnly, setNotSentOnly] = useState(true);
+  const [sentFilter, setSentFilter] = useState<'all' | 'unsent' | 'sent'>('unsent');
   const [focusIndex, setFocusIndex] = useState(0);
 
   const range = useMemo(() => {
@@ -74,10 +74,29 @@ function RemindersSection() {
 
   const settings = settingsQuery.data;
   const locale = i18n.language;
+  const isAr = locale.startsWith('ar');
+  const L = (ar: string, en: string) => (isAr ? ar : en);
+
+  const counts = useMemo(() => {
+    const all = bookingsQuery.data ?? [];
+    const sentCount = all.filter((b) => !!b.reminder_sent_at).length;
+    return { all: all.length, sent: sentCount, unsent: all.length - sentCount };
+  }, [bookingsQuery.data]);
+
   const bookings = useMemo(() => {
     const all = bookingsQuery.data ?? [];
-    return notSentOnly ? all.filter((b) => !b.reminder_sent_at) : all;
-  }, [bookingsQuery.data, notSentOnly]);
+    if (sentFilter === 'unsent') return all.filter((b) => !b.reminder_sent_at);
+    if (sentFilter === 'sent') return all.filter((b) => !!b.reminder_sent_at);
+    return all;
+  }, [bookingsQuery.data, sentFilter]);
+
+  const sentLabel = (iso: string) => {
+    const time = formatCairoTime(iso, locale);
+    const sameDay = cairoDateString(new Date(iso)) === cairoDateString(new Date());
+    return sameDay
+      ? L(`اتبعت الساعة ${time}`, `Sent at ${time}`)
+      : L(`اتبعت ${formatCairoDateShort(iso)} الساعة ${time}`, `Sent ${formatCairoDateShort(iso)} at ${time}`);
+  };
 
   const buildMessage = (booking: BookingWithRelations, type: 'reminder' | 'confirmation' | 'cancellation') => {
     if (!settings) return '';
@@ -126,12 +145,17 @@ function RemindersSection() {
         <Button variant={tab === 'upcoming' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('upcoming')}>
           {t('reminders.upcoming')}
         </Button>
-        <Button
-          variant={notSentOnly ? 'primary' : 'ghost'}
-          size="sm"
-          onClick={() => setNotSentOnly((v) => !v)}
-        >
-          {t('reminders.notSent')}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant={sentFilter === 'all' ? 'primary' : 'ghost'} size="sm" onClick={() => setSentFilter('all')}>
+          {L('الكل', 'All')} <span className="font-latin">({counts.all})</span>
+        </Button>
+        <Button variant={sentFilter === 'unsent' ? 'primary' : 'ghost'} size="sm" onClick={() => setSentFilter('unsent')}>
+          {t('reminders.notSent')} <span className="font-latin">({counts.unsent})</span>
+        </Button>
+        <Button variant={sentFilter === 'sent' ? 'primary' : 'ghost'} size="sm" onClick={() => setSentFilter('sent')}>
+          {L('اتبعت', 'Sent')} <span className="font-latin">({counts.sent})</span>
         </Button>
       </div>
 
@@ -152,7 +176,7 @@ function RemindersSection() {
                 key={booking.id}
                 className={cn(
                   'rounded-card border bg-white p-4',
-                  sent && 'opacity-60',
+                  sent && 'bg-sand/30',
                   i === focusIndex && 'ring-2 ring-gold/30',
                 )}
               >
@@ -167,20 +191,24 @@ function RemindersSection() {
                       {locale === 'ar' ? booking.service_name_ar : booking.service_name_en}
                     </p>
                   </div>
-                  {sent ? <Check className="size-5 text-success shrink-0" /> : null}
+                  {sent && booking.reminder_sent_at ? (
+                    <div className="flex shrink-0 flex-col items-end gap-0.5 text-end">
+                      <Check className="size-5 text-success" />
+                      <span className="text-[11px] font-medium text-success">{sentLabel(booking.reminder_sent_at)}</span>
+                    </div>
+                  ) : null}
                 </div>
                 <p className="mt-2 text-xs text-ink-70 bg-sand/40 rounded-btn p-2 line-clamp-2">
                   {t('reminders.preview')}: {preview}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
-                    variant="primary"
+                    variant={sent ? 'secondary' : 'primary'}
                     size="md"
-                    disabled={sent}
                     onClick={() => openWhatsApp(booking, 'reminder')}
                   >
                     <MessageCircle className="size-4" />
-                    {t('reminders.sendReminder')}
+                    {sent ? L('ابعت تاني', 'Send again') : t('reminders.sendReminder')}
                   </Button>
                   <Button variant="secondary" size="sm" onClick={() => openWhatsApp(booking, 'confirmation')}>
                     {t('reminders.sendConfirmation')}
@@ -330,21 +358,205 @@ function NewBookingsSection() {
   );
 }
 
+
+const CUSTOMER_URL = import.meta.env.VITE_CUSTOMER_URL || 'https://tito-customer.vercel.app';
+const INACTIVE_OPTIONS = [7, 15, 30, 60];
+const CONTACTED_KEY = 'tito.inactive.contacted';
+
+function readContacted(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(CONTACTED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function InactiveSection() {
+  const { i18n } = useTranslation();
+  const isAr = !!i18n.language?.startsWith('ar');
+  const L = (ar: string, en: string) => (isAr ? ar : en);
+  const [days, setDays] = useState(15);
+  const [contacted, setContacted] = useState<Record<string, string>>(readContacted);
+
+  const settingsQuery = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('settings').select('*').single();
+      if (error) throw error;
+      return data as Settings;
+    },
+    staleTime: 60_000,
+  });
+
+  // كل العملاء (الدالة بترجع آخر زيارة لكل عميل)
+  const customersQuery = useQuery({
+    queryKey: ['inactive-customers'],
+    queryFn: async () => {
+      const all: CustomerSearchResult[] = [];
+      const pageSize = 100;
+      for (let page = 0; page < 20; page += 1) {
+        const { data, error } = await supabase.rpc('admin_search_customers', {
+          p_q: '',
+          p_limit: pageSize,
+          p_offset: page * pageSize,
+        });
+        if (error) throw error;
+        const rows = (data ?? []) as CustomerSearchResult[];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+      }
+      return all;
+    },
+    staleTime: 60_000,
+  });
+
+  // اللي عنده حجز جاي مش غايب
+  const upcomingQuery = useQuery({
+    queryKey: ['inactive-upcoming-ids'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('user_id')
+        .in('status', ['confirmed', 'pending_payment'])
+        .gte('start_at', new Date().toISOString());
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.user_id as string | null).filter((x): x is string => !!x));
+    },
+    staleTime: 60_000,
+  });
+
+  const list = useMemo(() => {
+    const upcoming = upcomingQuery.data ?? new Set<string>();
+    const now = Date.now();
+    return (customersQuery.data ?? [])
+      .filter((c) => !c.is_blocked && !!c.phone && !!c.last_visit && !upcoming.has(c.id))
+      .map((c) => ({ c, away: Math.floor((now - new Date(c.last_visit as string).getTime()) / 86_400_000) }))
+      .filter((x) => x.away >= days)
+      .sort((a, b) => b.away - a.away);
+  }, [customersQuery.data, upcomingQuery.data, days]);
+
+  const sendMessage = (c: CustomerSearchResult, away: number) => {
+    const shop = settingsQuery.data?.shop_name || 'tito';
+    const link = `${CUSTOMER_URL}/book`;
+    const name = c.full_name || '';
+    const message = isAr
+      ? `أهلاً ${name} 👋\nوحشتنا في ${shop}! بقالك ${away} يوم ما زرتناش. تحب نحجزلك معاد؟\nتقدر تحجز من هنا: ${link}`
+      : `Hi ${name} 👋\nWe miss you at ${shop}! It has been ${away} days since your last visit. Would you like to book your next appointment?\nBook here: ${link}`;
+    const url = buildWhatsAppUrl(c.phone ?? '', message);
+    if (!url) {
+      toast.error(L('العميل مفيش عنده رقم واتساب صالح', 'This customer has no valid WhatsApp number'));
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+    const next = { ...contacted, [c.id]: new Date().toISOString() };
+    setContacted(next);
+    try {
+      window.localStorage.setItem(CONTACTED_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const isLoading = customersQuery.isLoading || upcomingQuery.isLoading;
+
+  return (
+    <div className="space-y-4">
+      <div className="border-b border-default pb-4">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold font-latin">WhatsApp</p>
+        <h1 className="mt-1 text-2xl font-bold text-espresso">{L('العملاء الغايبين', 'Inactive customers')}</h1>
+        <p className="mt-2 max-w-2xl text-sm text-ink-70">
+          {L(
+            'العملاء اللي ماحجزوش من فترة، ومعاهم رسالة واتساب جاهزة ترجّعهم.',
+            'Customers who have not booked for a while, with a ready WhatsApp message to bring them back.',
+          )}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-ink-70">{L('بقالهم', 'Away for')}</span>
+        {INACTIVE_OPTIONS.map((n) => (
+          <Button key={n} variant={days === n ? 'primary' : 'ghost'} size="sm" onClick={() => setDays(n)}>
+            <span className="font-latin">{n}</span> {L('يوم أو أكتر', 'days or more')}
+          </Button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-48" />
+      ) : customersQuery.isError ? (
+        <p className="text-sm text-danger">{L('حصلت مشكلة في تحميل العملاء', 'Could not load customers')}</p>
+      ) : list.length === 0 ? (
+        <p className="py-8 text-center text-ink-70">
+          {L('مفيش عملاء غايبين في المدة دي', 'No inactive customers for this period')}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-ink-70">
+            <span className="font-latin font-semibold text-espresso">{list.length}</span> {L('عميل', 'customers')}
+          </p>
+          {list.slice(0, 100).map(({ c, away }) => {
+            const doneAt = contacted[c.id];
+            return (
+              <div key={c.id} className="rounded-card border border-default bg-white p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-espresso">{c.full_name || '—'}</p>
+                    <p className="mt-0.5 font-latin text-sm text-ink-70" dir="ltr">
+                      {c.phone}
+                    </p>
+                    <p className="mt-1 text-sm text-ink-70">
+                      {L('آخر زيارة', 'Last visit')}:{' '}
+                      <span className="font-latin">{c.last_visit ? formatCairoDateShort(c.last_visit) : '—'}</span>{' '}
+                      ({L('من', '')} <span className="font-latin">{away}</span> {L('يوم', 'days ago')})
+                    </p>
+                  </div>
+                  {doneAt ? (
+                    <div className="flex shrink-0 flex-col items-end gap-0.5 text-end">
+                      <Check className="size-5 text-success" />
+                      <span className="text-[11px] font-medium text-success">
+                        {L('اتبعتله', 'Messaged')} {formatCairoDateShort(doneAt)}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-3">
+                  <Button variant={doneAt ? 'secondary' : 'primary'} size="md" onClick={() => sendMessage(c, away)}>
+                    <MessageCircle className="size-4" />
+                    {doneAt ? L('ابعت تاني', 'Send again') : L('ابعت رسالة', 'Send message')}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          {list.length > 100 ? (
+            <p className="text-center text-xs text-ink-70">
+              {L('بنعرض أول 100 عميل بس', 'Showing the first 100 customers only')}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RemindersPage() {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
-  const [section, setSection] = useState<'new' | 'reminders'>('new');
+  const [section, setSection] = useState<'new' | 'reminders' | 'inactive'>('new');
   const { unread } = useAdminNotifications();
 
   const tabs = [
     { key: 'new' as const, label: isAr ? 'الجديدة' : 'New', icon: Bell, badge: unread },
     { key: 'reminders' as const, label: isAr ? 'التذكيرات' : 'Reminders', icon: MessageCircle, badge: 0 },
+    { key: 'inactive' as const, label: isAr ? 'الغايبين' : 'Inactive', icon: Users, badge: 0 },
   ];
 
   return (
     <div className="space-y-4">
       {/* تبويبين فوق: كل واحد بيفتح قسمه لوحده، من غير ما تنزل تحت */}
-      <div className="grid grid-cols-2 gap-2 rounded-card border border-default bg-white p-1.5">
+      <div className="grid grid-cols-3 gap-2 rounded-card border border-default bg-white p-1.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = section === tab.key;
@@ -373,6 +585,10 @@ export function RemindersPage() {
       {section === 'new' ? (
         <div className="rounded-card border border-gold/40 bg-white p-4 sm:p-5">
           <NewBookingsSection />
+        </div>
+      ) : section === 'inactive' ? (
+        <div className="rounded-card border border-default bg-white p-4 sm:p-5">
+          <InactiveSection />
         </div>
       ) : (
         <div className="rounded-card border border-default bg-sand/40 p-4 sm:p-5">

@@ -76,6 +76,24 @@ function getStatusStyle(status: string) {
   }
 }
 
+/** يوزّع العناصر المتداخلة جنب بعض، وغير المتداخلة تاخد العرض كله */
+function layoutLanes(items: { id: string; s: number; e: number }[]) {
+  const sorted = [...items].sort((a, b) => a.s - b.s);
+  const laneEnds: number[] = [];
+  const lane = new Map<string, number>();
+  for (const it of sorted) {
+    let l = laneEnds.findIndex((end) => end <= it.s);
+    if (l === -1) {
+      l = laneEnds.length;
+      laneEnds.push(it.e);
+    } else {
+      laneEnds[l] = it.e;
+    }
+    lane.set(it.id, l);
+  }
+  return { lane, count: Math.max(1, laneEnds.length) };
+}
+
 export function TodayPage() {
   const { t, i18n } = useTranslation();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -342,7 +360,7 @@ export function TodayPage() {
               onClick={() => setSelectedDate((d) => addDays(d, -stepDays))}
               aria-label="Previous"
             >
-              <ChevronRight className="size-4" />
+              {locale === 'ar' ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
             </Button>
             <Button
               variant="ghost"
@@ -350,7 +368,7 @@ export function TodayPage() {
               onClick={() => setSelectedDate((d) => addDays(d, stepDays))}
               aria-label="Next"
             >
-              <ChevronLeft className="size-4" />
+              {locale === 'ar' ? <ChevronLeft className="size-4" /> : <ChevronRight className="size-4" />}
             </Button>
           </div>
 
@@ -433,14 +451,14 @@ export function TodayPage() {
       {pickerOpen ? (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setPickerOpen(false)} />
-          <div className="absolute start-4 top-28 z-50 w-72 rounded-card border border-bark/15 bg-white p-3 shadow-lg">
+          <div className="fixed inset-x-0 top-24 z-50 mx-auto w-[min(18rem,calc(100vw-1.5rem))] rounded-card border border-bark/15 bg-white p-3 shadow-lg">
             <div className="mb-2 flex items-center justify-between">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setPickerMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
               >
-                <ChevronRight className="size-4" />
+                {locale === 'ar' ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
               </Button>
               <p className="font-latin text-sm font-semibold">
                 {pickerMonth.getFullYear()}-{String(pickerMonth.getMonth() + 1).padStart(2, '0')}
@@ -450,7 +468,7 @@ export function TodayPage() {
                 size="sm"
                 onClick={() => setPickerMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
               >
-                <ChevronLeft className="size-4" />
+                {locale === 'ar' ? <ChevronLeft className="size-4" /> : <ChevronRight className="size-4" />}
               </Button>
             </div>
             <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-ink-70">
@@ -523,7 +541,7 @@ export function TodayPage() {
                 {daysList.map((day) => {
                   const dayStr = cairoDateString(day);
                   const isTodayDay = dayStr === cairoDateString(new Date());
-                  const { isClosed, openMin, closeMin, dayBreaks, dayOff } = blocksForDay(day);
+                  const { isClosed, openMin, closeMin, dayBreaks, dayOff, dayStart, dayEnd } = blocksForDay(day);
                   const dayBookings = bookings.filter((b) => cairoDateString(toCairo(b.start_at)) === dayStr);
 
                   // الحجوزات المتداخلة بتتوزع جنب بعض بدل ما تتغطى
@@ -674,28 +692,42 @@ export function TodayPage() {
                         })}
 
                         {/* Time-off Blocks */}
-                        {dayOff.map((to, laneIdx) => {
-                          const sLocal = toCairo(to.start_at);
-                          const eLocal = toCairo(to.end_at);
-                          const sMin = to.all_day ? gridStartMinutes : sLocal.getHours() * 60 + sLocal.getMinutes();
-                          const eMin = to.all_day ? gridEndMinutes : eLocal.getHours() * 60 + eLocal.getMinutes();
-                          const topPx = Math.max(0, ((sMin - gridStartMinutes) / 60) * HOUR_HEIGHT);
-                          const hPx = Math.max(22, ((eMin - sMin) / 60) * HOUR_HEIGHT);
-                          return (
-                            <div
-                              key={to.id}
-                              style={{
-                                top: `${topPx}px`,
-                                height: `${hPx}px`,
-                                left: `calc(${(laneIdx * 100) / dayOff.length}% + 4px)`,
-                                width: `calc(${100 / dayOff.length}% - 8px)`,
-                              }}
-                              className="pointer-events-none absolute z-5 overflow-hidden rounded border border-dashed border-gold/50 bg-gold/20 px-1.5 py-0.5 text-[11px] text-bark"
-                            >
-                              <p className="truncate font-semibold">{to.reason ? to.reason : t('today.holiday')}</p>
-                            </div>
-                          );
-                        })}
+                        {(() => {
+                          const segs = dayOff.map((to) => {
+                            // الجزء اللي يخص اليوم ده بس (لو الإجازة على أكتر من يوم)
+                            const segS = Math.max(parseISO(to.start_at).getTime(), dayStart);
+                            const segE = Math.min(parseISO(to.end_at).getTime(), dayEnd);
+                            const sL = toCairo(new Date(segS));
+                            const eL = toCairo(new Date(segE));
+                            const sMin = to.all_day ? gridStartMinutes : sL.getHours() * 60 + sL.getMinutes();
+                            const eMin = to.all_day
+                              ? gridEndMinutes
+                              : segE >= dayEnd
+                                ? 24 * 60
+                                : eL.getHours() * 60 + eL.getMinutes();
+                            return { to, sMin, eMin };
+                          });
+                          const { lane, count } = layoutLanes(segs.map((x) => ({ id: x.to.id, s: x.sMin, e: Math.max(x.eMin, x.sMin + 20) })));
+                          return segs.map(({ to, sMin, eMin }) => {
+                            const topPx = Math.max(0, ((sMin - gridStartMinutes) / 60) * HOUR_HEIGHT);
+                            const hPx = Math.max(22, ((eMin - sMin) / 60) * HOUR_HEIGHT);
+                            const laneIdx = lane.get(to.id) ?? 0;
+                            return (
+                              <div
+                                key={to.id}
+                                style={{
+                                  top: `${topPx}px`,
+                                  height: `${hPx}px`,
+                                  insetInlineStart: `calc(${(laneIdx * 100) / count}% + 4px)`,
+                                  width: `calc(${100 / count}% - 8px)`,
+                                }}
+                                className="pointer-events-none absolute z-5 overflow-hidden rounded border border-dashed border-gold/50 bg-gold/20 px-1.5 py-0.5 text-[11px] text-bark"
+                              >
+                                <p className="truncate font-semibold">{to.reason ? to.reason : t('today.holiday')}</p>
+                              </div>
+                            );
+                          });
+                        })()}
 
                         {/* Booking Cards in Time Slots */}
                         {dayBookings.map((b) => {
