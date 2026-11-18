@@ -279,7 +279,30 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
           </div>
           <div>
             <p className="text-sm text-ink-70">{t('booking.price')}</p>
-            <p className="font-medium font-latin">{formatEGP(b.price_egp)}</p>
+            {(() => {
+              // الكوبون والخصم بيتسجلوا على الحجز لو اتطبق
+              const extra = b as unknown as {
+                coupon_code?: string | null;
+                discount_egp?: number | null;
+                price_before_discount?: number | null;
+              };
+              const discount = Number(extra.discount_egp ?? 0);
+              if (!extra.coupon_code || discount <= 0) {
+                return <p className="font-medium font-latin">{formatEGP(b.price_egp)}</p>;
+              }
+              return (
+                <div className="space-y-0.5">
+                  <p className="text-sm text-ink-70 font-latin line-through">
+                    {formatEGP(Number(extra.price_before_discount ?? Number(b.price_egp) + discount))}
+                  </p>
+                  <p className="font-medium font-latin">{formatEGP(b.price_egp)}</p>
+                  <p className="text-sm font-medium text-success">
+                    {locale === 'ar' ? `كوبون ${extra.coupon_code} · خصم ` : `Coupon ${extra.coupon_code} · discount `}
+                    <span className="font-latin">{formatEGP(discount)}</span>
+                  </p>
+                </div>
+              );
+            })()}
           </div>
           <div>
             <p className="text-sm text-ink-70">{t('booking.time')}</p>
