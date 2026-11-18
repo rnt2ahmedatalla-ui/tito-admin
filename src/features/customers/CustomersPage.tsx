@@ -324,7 +324,7 @@ export function CustomersPage() {
     if (!q || autoOpenedRef.current || customers.length === 0) return;
     const match = customers.find((c) => (c.phone ?? '') === q || (c.full_name ?? '') === q) ?? customers[0];
     autoOpenedRef.current = true;
-    setOpenCustomer(match);
+    if (match) setOpenCustomer(match);
   }, [customers, searchParams]);
 
   const blockMutation = useMutation({
