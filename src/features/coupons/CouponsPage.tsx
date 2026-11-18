@@ -92,6 +92,18 @@ export function CouponsPage() {
     onError: (e) => toast.error(mapError(e, t)),
   });
 
+  const deleteCoupon = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await db.from('coupons').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(isAr ? 'اتمسح الكوبون' : 'Coupon deleted');
+      refresh();
+    },
+    onError: (e) => toast.error(mapError(e, t)),
+  });
+
   const coupons = couponsQuery.data ?? [];
 
   return (
@@ -166,14 +178,28 @@ export function CouponsPage() {
                   </p>
                   {c.note ? <p className="truncate text-xs text-ink-70">{c.note}</p> : null}
                 </div>
-                <Button
-                  size="sm"
-                  variant={c.active ? 'secondary' : 'primary'}
-                  loading={toggleCoupon.isPending}
-                  onClick={() => toggleCoupon.mutate({ id: c.id, active: c.active })}
-                >
-                  {c.active ? (isAr ? 'وقف' : 'Disable') : isAr ? 'فعّل' : 'Enable'}
-                </Button>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant={c.active ? 'secondary' : 'primary'}
+                    loading={toggleCoupon.isPending}
+                    onClick={() => toggleCoupon.mutate({ id: c.id, active: c.active })}
+                  >
+                    {c.active ? (isAr ? 'وقف' : 'Disable') : isAr ? 'فعّل' : 'Enable'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={deleteCoupon.isPending}
+                    onClick={() => {
+                      if (window.confirm(isAr ? `متأكد إنك عايز تمسح الكوبون ${c.code}؟` : `Delete coupon ${c.code}?`)) {
+                        deleteCoupon.mutate(c.id);
+                      }
+                    }}
+                  >
+                    {isAr ? 'امسح' : 'Delete'}
+                  </Button>
+                </div>
               </CardBody>
             </Card>
           ))
