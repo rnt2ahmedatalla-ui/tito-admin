@@ -17,6 +17,7 @@ import { mapError } from '@/lib/errors';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { openConfirmationWhatsApp } from '@/lib/confirmWhatsApp';
 import { supabase } from '@/lib/supabase';
+import { useStaff } from '@/features/staff/StaffPage';
 
 interface BookingDetailPanelProps {
   booking: BookingWithRelations | null;
@@ -41,6 +42,8 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
   const [offerFor, setOfferFor] = useState<string | null>(null);
   const [localOffer, setLocalOffer] = useState<string | null>(null);
 
+  const [staffOverride, setStaffOverride] = useState<{ id: string; val: string } | null>(null);
+  const staffList = (useStaff().data ?? []).filter((m) => m.is_active);
   const payment = booking ? normalizeBooking(booking).payment : null;
   const { url: proofUrl } = useSignedProofUrl(payment?.proof_path, open && !!payment?.proof_path);
 
@@ -196,6 +199,23 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
     if (starts.length === 0) toast.message(t('booking.moveNoSlots'));
   };
 
+  const setStaff = useMutation({
+    mutationFn: async ({ id, staffId }: { id: string; staffId: string | null }) => {
+      const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ error: { message: string } | null }>;
+      const { error } = await rpcUntyped('admin_set_booking_staff', { p_booking_id: id, p_staff_id: staffId });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      setStaffOverride({ id: vars.id, val: vars.staffId ?? '' });
+      invalidate();
+      toast.success(i18n.language === 'ar' ? 'اتغيّر الحلاق' : 'Barber updated');
+    },
+    onError: (e) => toast.error(mapError(e, t)),
+  });
+
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'completed' | 'no_show' }) => {
       const { error } = await supabase.rpc('admin_set_booking_status', {
@@ -309,6 +329,22 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
           <Row label={L('الميعاد', 'When')}>
             <span className="font-latin">{formatCairoDateShort(b.start_at)} · {formatCairoTime(b.start_at, locale)}</span>
           </Row>
+          {staffList.length >= 2 ? (
+            <div className="flex items-center justify-between gap-3 py-1 text-sm">
+              <span className="shrink-0 text-ink-70">{L('الحلاق', 'Barber')}</span>
+              <select
+                value={staffOverride?.id === b.id ? staffOverride.val : ((b as unknown as { staff_id?: string | null }).staff_id ?? '')}
+                onChange={(e) => setStaff.mutate({ id: b.id, staffId: e.target.value || null })}
+                disabled={setStaff.isPending}
+                className="min-h-9 min-w-0 rounded-btn border border-default bg-white px-2 text-sm font-medium"
+              >
+                <option value="">{L('من غير تحديد', 'Unassigned')}</option>
+                {staffList.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="mt-1 border-t border-bark/10 pt-2">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-medium text-espresso">{isAr ? b.service_name_ar : b.service_name_en}</span>

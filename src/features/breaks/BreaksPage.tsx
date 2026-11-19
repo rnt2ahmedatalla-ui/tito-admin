@@ -10,6 +10,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
+import { useStaff } from '@/features/staff/StaffPage';
 
 type RecurringBreak = {
   id: string;
@@ -18,6 +19,7 @@ type RecurringBreak = {
   end_time: string;
   days_of_week: number[];
   is_active: boolean;
+  staff_id?: string | null;
 };
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -34,7 +36,10 @@ export function BreaksPage() {
     start_time: '14:30',
     end_time: '15:30',
     days_of_week: ALL_DAYS as number[],
+    staff_id: '',
   });
+  const staffList = (useStaff().data ?? []).filter((m) => m.is_active);
+  const staffName = (id?: string | null) => staffList.find((m) => m.id === id)?.name ?? null;
 
   const { data: breaks = [], isLoading } = useQuery({
     queryKey: ['recurring-breaks'],
@@ -55,6 +60,7 @@ export function BreaksPage() {
         start_time: form.start_time.length === 5 ? `${form.start_time}:00` : form.start_time,
         end_time: form.end_time.length === 5 ? `${form.end_time}:00` : form.end_time,
         days_of_week: form.days_of_week,
+        staff_id: form.staff_id || null,
       };
       if (form.start_time >= form.end_time) throw new Error('INVALID_RANGE');
       const { error } = editingId
@@ -105,6 +111,7 @@ export function BreaksPage() {
       start_time: String(b.start_time).slice(0, 5),
       end_time: String(b.end_time).slice(0, 5),
       days_of_week: b.days_of_week,
+      staff_id: b.staff_id ?? '',
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -112,7 +119,7 @@ export function BreaksPage() {
 
   const startAdd = () => {
     setEditingId(null);
-    setForm({ reason: '', start_time: '14:30', end_time: '15:30', days_of_week: ALL_DAYS });
+    setForm({ reason: '', start_time: '14:30', end_time: '15:30', days_of_week: ALL_DAYS, staff_id: '' });
     setShowForm(true);
   };
 
@@ -150,6 +157,22 @@ export function BreaksPage() {
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
               placeholder={t('breaks.defaultReason')}
             />
+            {staffList.length > 0 ? (
+              <div>
+                <label htmlFor="break-staff" className="text-sm font-medium text-ink-70">{isAr ? 'الاستراحة دي لمين؟' : 'Who is this break for?'}</label>
+                <select
+                  id="break-staff"
+                  value={form.staff_id}
+                  onChange={(e) => setForm({ ...form, staff_id: e.target.value })}
+                  className="mt-1 min-h-11 w-full rounded-btn border border-default bg-white px-3 text-sm"
+                >
+                  <option value="">{isAr ? 'المحل كله (كل الحلاقين)' : 'Whole shop (all barbers)'}</option>
+                  {staffList.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-3">
               <Input
                 label={t('breaks.start')}
@@ -201,7 +224,12 @@ export function BreaksPage() {
             <Card key={b.id}>
               <CardBody className={`flex items-center gap-2 p-3 ${b.is_active ? '' : 'opacity-60'}`}>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{b.reason || t('breaks.defaultReason')}</p>
+                  <p className="font-medium">
+                    {b.reason || t('breaks.defaultReason')}
+                    {b.staff_id ? (
+                      <span className="ms-2 rounded-full bg-gold/20 px-2 py-0.5 text-xs font-medium text-espresso">{staffName(b.staff_id) ?? (isAr ? 'حلاق' : 'Barber')}</span>
+                    ) : null}
+                  </p>
                   <p className="font-latin text-sm text-ink-70">
                     {String(b.start_time).slice(0, 5)} – {String(b.end_time).slice(0, 5)}
                     {' · '}

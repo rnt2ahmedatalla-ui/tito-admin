@@ -10,6 +10,9 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { BookingDetailPanel } from '@/components/booking/BookingDetailPanel';
 import { WalkInModal } from '@/features/walkin/WalkInForm';
+import { Avatar, useStaff, type StaffMember } from '@/features/staff/StaffPage';
+import { untypedDb } from '@/features/payments/useFinanceBoxes';
+import { Columns3 } from 'lucide-react';
 import {
   cairoDayBounds,
   cairoWeekBounds,
@@ -195,6 +198,49 @@ export function TodayPage() {
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [walkInDate, setWalkInDate] = useState('');
   const [walkInTime, setWalkInTime] = useState('');
+  const [walkInStaff, setWalkInStaff] = useState('');
+
+  // ===== الطاقم: فلتر الحلاق + عرض أعمدة =====
+  const staffAll = useStaff().data ?? [];
+  const activeStaff = staffAll.filter((m) => m.is_active);
+  const showStaffUI = activeStaff.length >= 2;
+  const [staffFilter, setStaffFilter] = useState<string>('all');
+  const [columnsMode, setColumnsMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('tito.calendar.columns') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [isDesktop, setIsDesktop] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const on = () => setIsDesktop(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('tito.calendar.columns', columnsMode ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [columnsMode]);
+  const staffHoursQuery = useQuery({
+    queryKey: ['staff-hours'],
+    enabled: showStaffUI,
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await untypedDb.from('staff_hours').select('staff_id, day_of_week, is_off, start_time, end_time');
+      if (error) throw error;
+      return (data ?? []) as Array<{ staff_id: string; day_of_week: number; is_off: boolean; start_time: string | null; end_time: string | null }>;
+    },
+  });
+  const staffHours = staffHoursQuery.data ?? [];
+  const bookingStaffId = (b: unknown) => (b as { staff_id?: string | null }).staff_id ?? null;
 
   const bounds =
     viewMode === 'day'
@@ -203,6 +249,7 @@ export function TodayPage() {
         ? cairoRangeBounds(selectedDate, 3)
         : cairoWeekBounds(selectedDate);
 
+  const columnsActive = showStaffUI && columnsMode && isDesktop && viewMode === 'day';
   const dayCount = viewMode === 'day' ? 1 : viewMode === 'three' ? 3 : 7;
   const stepDays = viewMode === 'day' ? 1 : viewMode === 'three' ? 3 : 7;
 
@@ -374,7 +421,13 @@ export function TodayPage() {
     return Array.from({ length: dayCount }).map((_, i) => addDays(start, i));
   }, [bounds.start, dayCount]);
 
-  const blocksForDay = (day: Date) => {
+  const selStaff: StaffMember | null =
+    showStaffUI && staffFilter !== 'all' ? (activeStaff.find((m) => m.id === staffFilter) ?? null) : null;
+  const colSpecs: Array<{ day: Date; staff: StaffMember | null; key: string }> = columnsActive
+    ? activeStaff.map((m) => ({ day: daysList[0] ?? selectedDate, staff: m, key: `col-${m.id}` }))
+    : daysList.map((day) => ({ day, staff: selStaff, key: cairoDateString(day) }));
+
+  const blocksForDay = (day: Date, staffId: string | null) => {
     const dayStr = cairoDateString(day);
     const dow = toCairo(day).getDay();
     const dayBounds = cairoDayBounds(day);
@@ -382,11 +435,24 @@ export function TodayPage() {
     const dayEnd = parseISO(dayBounds.end).getTime();
 
     const dayHours = hoursQuery.data?.find((h) => h.day_of_week === dow);
-    const isClosed = dayHours?.is_closed ?? false;
-    const openMin = dayHours && !dayHours.is_closed ? timeToMinutes(dayHours.open_time) : null;
-    const closeMin = dayHours && !dayHours.is_closed ? timeToMinutes(dayHours.close_time) : null;
-    const dayBreaks = breaks.filter((br) => br.is_active && br.days_of_week.includes(dow));
+    const sh = staffId ? staffHours.find((r) => r.staff_id === staffId && r.day_of_week === dow) : undefined;
+    const isClosed = (dayHours?.is_closed ?? false) || !!sh?.is_off;
+    let openMin = dayHours && !dayHours.is_closed ? timeToMinutes(dayHours.open_time) : null;
+    let closeMin = dayHours && !dayHours.is_closed ? timeToMinutes(dayHours.close_time) : null;
+    if (sh && !sh.is_off) {
+      if (openMin !== null && sh.start_time) openMin = Math.max(openMin, timeToMinutes(sh.start_time));
+      if (closeMin !== null && sh.end_time) closeMin = Math.min(closeMin, timeToMinutes(sh.end_time));
+    }
+    // استراحات/إجازات المحل كله + بتاعة الحلاق ده (لو معروف). من غير حلاق بنعرض بتاعة المحل بس.
+    const scopeOk = (sid: unknown) => {
+      const v = (sid as string | null | undefined) ?? null;
+      return v === null || v === staffId;
+    };
+    const dayBreaks = breaks.filter(
+      (br) => br.is_active && br.days_of_week.includes(dow) && scopeOk((br as unknown as { staff_id?: string | null }).staff_id),
+    );
     const dayOff = timeOffs.filter((to) => {
+      if (!scopeOk((to as unknown as { staff_id?: string | null }).staff_id)) return false;
       const s = parseISO(to.start_at).getTime();
       const e = parseISO(to.end_at).getTime();
       return s < dayEnd && e > dayStart;
@@ -402,7 +468,8 @@ export function TodayPage() {
     return { dayStr, isClosed, openMin, closeMin, dayBreaks, dayOff, dayBounds, dayStart, dayEnd, coversFullDay };
   };
 
-  const handleSlotClick = (day: Date, hour: number, minute = 0) => {
+  const handleSlotClick = (day: Date, hour: number, minute = 0, staffId = '') => {
+    setWalkInStaff(staffId);
     const dateStr = cairoDateString(day);
     const pad = (n: number) => String(n).padStart(2, '0');
     const localIso = `${dateStr}T${pad(hour)}:${pad(minute)}:00`;
@@ -423,6 +490,7 @@ export function TodayPage() {
   };
 
   const locale = i18n.language?.startsWith('ar') ? 'ar' : 'en';
+  const isAr = locale === 'ar';
 
   return (
     <div className="space-y-4">
@@ -590,6 +658,51 @@ export function TodayPage() {
         </>
       ) : null}
 
+      {showStaffUI ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStaffFilter('all')}
+            className={cn(
+              'inline-flex min-h-9 items-center rounded-full border px-3 text-sm font-medium transition-colors',
+              staffFilter === 'all' ? 'border-gold bg-gold text-espresso' : 'border-default bg-white text-ink-70 hover:bg-sand',
+            )}
+          >
+            {isAr ? 'الكل' : 'All'}
+          </button>
+          {activeStaff.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setStaffFilter(m.id)}
+              className={cn(
+                'inline-flex min-h-9 items-center gap-1.5 rounded-full border ps-1 pe-3 text-sm font-medium transition-colors',
+                staffFilter === m.id ? 'border-gold bg-gold text-espresso' : 'border-default bg-white text-ink-70 hover:bg-sand',
+              )}
+            >
+              <Avatar name={m.name} photo={m.photo} className="size-7 text-xs" />
+              {m.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !columnsMode;
+              setColumnsMode(next);
+              if (next) setViewMode('day');
+            }}
+            aria-pressed={columnsMode}
+            className={cn(
+              'ms-auto hidden min-h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors lg:inline-flex',
+              columnsMode ? 'border-gold bg-gold/20 text-espresso' : 'border-default bg-white text-ink-70 hover:bg-sand',
+            )}
+          >
+            <Columns3 className="size-4" aria-hidden />
+            {isAr ? 'أعمدة الحلاقين' : 'Barber columns'}
+          </button>
+        </div>
+      ) : null}
+
       {/* Setmore Multi-Day Calendar Grid */}
       {bookingsQuery.isLoading ? (
         <Skeleton className="h-[520px] rounded-card" />
@@ -642,11 +755,17 @@ export function TodayPage() {
 
               {/* Day Columns Container */}
               <div className="flex w-full flex-1">
-                {daysList.map((day) => {
+                {colSpecs.map(({ day, staff, key: colKey }) => {
                   const dayStr = cairoDateString(day);
                   const isTodayDay = dayStr === cairoDateString(new Date());
-                  const { isClosed, openMin, closeMin, dayBreaks, dayOff, dayStart, dayEnd } = blocksForDay(day);
-                  const dayBookings = bookings.filter((b) => cairoDateString(toCairo(b.start_at)) === dayStr);
+                  const { isClosed, openMin, closeMin, dayBreaks, dayOff, dayStart, dayEnd } = blocksForDay(day, staff?.id ?? null);
+                  const dayBookings = bookings.filter((b) => {
+                    if (cairoDateString(toCairo(b.start_at)) !== dayStr) return false;
+                    if (!staff) return true;
+                    const sid = bookingStaffId(b);
+                    // الحجز اللي من غير حلاق بيشغل كل الحلاقين
+                    return sid === null || sid === staff.id;
+                  });
 
                   // الحجوزات المتداخلة بتتوزع جنب بعض بدل ما تتغطى
                   const laneEnds: number[] = [];
@@ -675,7 +794,9 @@ export function TodayPage() {
                   const dayNumber = toCairo(day).getDate();
 
                   const minColWidth =
-                    viewMode === 'day'
+                    columnsActive
+                      ? 'min-w-[220px]'
+                      : viewMode === 'day'
                       ? 'min-w-[240px]'
                       : viewMode === 'three'
                         ? 'min-w-0 flex-1 lg:min-w-[180px]'
@@ -683,7 +804,7 @@ export function TodayPage() {
 
                   return (
                     <div
-                      key={dayStr}
+                      key={colKey}
                       className={cn(
                         'flex flex-1 flex-col border-e border-bark/15 last:border-e-0',
                         minColWidth,
@@ -698,6 +819,13 @@ export function TodayPage() {
                           isTodayDay ? 'bg-gold/15' : 'bg-white',
                         )}
                       >
+                        {columnsActive && staff ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <Avatar name={staff.name} photo={staff.photo} className="size-8 text-sm" />
+                            <span className="max-w-full truncate px-1 text-xs font-bold text-espresso">{staff.name}</span>
+                          </div>
+                        ) : (
+                        <>
                         <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-70">
                           {weekdayShort}
                         </span>
@@ -723,6 +851,11 @@ export function TodayPage() {
                             </span>
                           ) : null}
                         </div>
+                        {selStaff && !columnsActive ? (
+                          <span className="max-w-full truncate text-[10px] font-semibold text-gold-dark">{selStaff.name}</span>
+                        ) : null}
+                        </>
+                        )}
                       </div>
 
                       {/* Day Column Hours & Bookings */}
@@ -737,7 +870,7 @@ export function TodayPage() {
                               const r = e.currentTarget.getBoundingClientRect();
                               const frac = r.height > 0 ? (e.clientY - r.top) / r.height : 0;
                               const minute = Math.min(45, Math.max(0, Math.floor(frac * 4) * 15));
-                              handleSlotClick(day, hour, minute);
+                              handleSlotClick(day, hour, minute, staff?.id ?? '');
                             }}
                             title={t('today.tapToBook')}
                             className="group absolute inset-x-0 cursor-pointer border-b border-bark/10 transition-colors hover:bg-gold/10"
@@ -881,6 +1014,14 @@ export function TodayPage() {
                                   ) : isShopBooking(b) ? (
                                     <Store className="size-3.5 shrink-0 opacity-70" aria-label={locale === 'ar' ? 'في المحل' : 'In shop'} />
                                   ) : null}
+                                  {showStaffUI && !staff && bookingStaffId(b) ? (
+                                    <span
+                                      title={staffAll.find((m) => m.id === bookingStaffId(b))?.name ?? ''}
+                                      className="flex size-4 shrink-0 items-center justify-center rounded-full bg-espresso/80 text-[9px] font-bold text-cream"
+                                    >
+                                      {(staffAll.find((m) => m.id === bookingStaffId(b))?.name ?? '?').trim().charAt(0).toUpperCase()}
+                                    </span>
+                                  ) : null}
                                   {b.status === 'pending_payment' ? (
                                     <span className="size-2 shrink-0 rounded-full bg-amber-500" aria-label={locale === 'ar' ? 'مستني' : 'Pending'} />
                                   ) : null}
@@ -936,6 +1077,7 @@ export function TodayPage() {
         onClose={() => setWalkInOpen(false)}
         initialDate={walkInDate}
         initialTime={walkInTime}
+        initialStaffId={walkInStaff}
       />
 
       {/* Existing Booking Detail Panel */}
