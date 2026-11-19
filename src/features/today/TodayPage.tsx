@@ -709,7 +709,7 @@ export function TodayPage() {
         <Skeleton className="h-[520px] rounded-card" />
       ) : (
         <div className="relative overflow-hidden rounded-card border border-bark/15 bg-white shadow-warm-sm">
-          <div className="absolute bottom-3 end-3 z-40 flex flex-col overflow-hidden rounded-btn border border-bark/20 bg-white/90 opacity-80 shadow-warm">
+          <div className="absolute bottom-36 end-3 z-40 flex flex-col overflow-hidden rounded-btn border border-bark/20 bg-white/95 shadow-warm lg:bottom-3">
             <button
               type="button"
               onClick={() => setHourH((h) => clampH(h * 1.25))}
@@ -724,7 +724,7 @@ export function TodayPage() {
               onClick={() => setHourH((h) => clampH(h / 1.25))}
               disabled={hourH <= HOUR_MIN}
               aria-label="Zoom out"
-              className="flex size-10 items-center justify-center border-t border-bark/15 text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
+              className="flex size-9 items-center justify-center border-t border-bark/15 text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
             >
               −
             </button>

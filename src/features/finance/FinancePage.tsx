@@ -19,12 +19,13 @@ import {
   useFinData,
   type Bucket,
   type Category,
+  type Recurring,
   type FinData,
   type Wallet,
   type WalletKind,
 } from './useFinance';
 
-type TabId = 'overview' | 'expenses' | 'wallets' | 'closing' | 'categories';
+type TabId = 'overview' | 'expenses' | 'recurring' | 'wallets' | 'closing' | 'categories';
 
 const selectCls = 'min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm text-espresso';
 
@@ -60,6 +61,7 @@ export function FinancePage() {
   const tabs: Array<{ id: TabId; label: string }> = [
     { id: 'overview', label: L('نظرة عامة', 'Overview') },
     { id: 'expenses', label: L('المصروفات', 'Expenses') },
+    { id: 'recurring', label: L('الثابتة', 'Recurring') },
     { id: 'wallets', label: L('المحافظ', 'Wallets') },
     { id: 'closing', label: L('الإقفال اليومي', 'Daily closing') },
     { id: 'categories', label: L('التصنيفات', 'Categories') },
@@ -78,6 +80,7 @@ export function FinancePage() {
   return (
     <div className="min-w-0 space-y-4">
       <h1 className="text-xl font-bold text-espresso">{L('المالية', 'Finance')}</h1>
+      <Guide />
       <div role="tablist" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {tabs.map((t) => (
           <button
@@ -100,6 +103,8 @@ export function FinancePage() {
         <Overview d={d} />
       ) : tab === 'expenses' ? (
         <Expenses d={d} />
+      ) : tab === 'recurring' ? (
+        <RecurringTab d={d} />
       ) : tab === 'wallets' ? (
         <Wallets d={d} />
       ) : tab === 'closing' ? (
@@ -113,7 +118,7 @@ export function FinancePage() {
 
 /* ───────────── نظرة عامة ───────────── */
 function Overview({ d }: { d: FinData }) {
-  const { L, isAr } = useLang();
+  const { L } = useLang();
   const [ym, setYm] = useState(todayCairo().slice(0, 7));
   const { from, to } = monthBounds(ym);
   const incomeQ = useQuery({ queryKey: ['fin-month', from, to], queryFn: () => fetchIncome(from, to), retry: false });
@@ -210,8 +215,9 @@ function Overview({ d }: { d: FinData }) {
             ))}
           </ul>
         )}
-        <p className="hidden">{isAr ? '' : ''}</p>
       </section>
+
+      <Trend d={d} />
     </div>
   );
 }
@@ -656,5 +662,296 @@ function Categories({ d }: { d: FinData }) {
         </CardBody></Card>
       ) : null}
     </div>
+  );
+}
+
+/* ───────────── دليل الاستخدام ───────────── */
+function Guide() {
+  const { L } = useLang();
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem('fin-guide-seen') !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (!next) {
+      try {
+        localStorage.setItem('fin-guide-seen', '1');
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+  const steps: Array<[string, string, string, string]> = [
+    ['١', L('اضبط البداية', 'Set up'), L('من "المحافظ": حط الرصيد الافتتاحي لكل محفظة (الكاش في الدرج، رصيد الإنستا، الادخار).', 'In Wallets: enter each wallet\'s opening balance.'), ''],
+    ['٢', L('سجّل المصروفات', 'Log expenses'), L('من "المصروفات": اكتب المبلغ واختار التصنيف والمحفظة. دخل الحجوزات بيتسجل لوحده.', 'In Expenses: amount, category, wallet. Booking income is automatic.'), ''],
+    ['٣', L('الثابتة بتتخصم لوحدها', 'Fixed costs auto-post'), L('من "الثابتة": ضيف الإيجار والإنترنت والكهرباء مرة واحدة، وهتتسجل كل شهر في يومها. وتقدر تعمل تحويل شهري تلقائي للادخار.', 'In Recurring: add rent, internet etc. once; they post monthly. You can also auto-transfer to savings.'), ''],
+    ['٤', L('اقفل اليوم', 'Close the day'), L('آخر اليوم من "الإقفال اليومي": عدّ الكاش اللي في الدرج واكتبه، والنظام يقولك زيادة ولا عجز.', 'At day end: count the drawer cash and enter it.'), ''],
+    ['٥', L('تابع الأرباح', 'Track profit'), L('من "نظرة عامة": أرصدة المحافظ، صافي ربح الشهر، ومقارنة آخر 6 شهور.', 'Overview: balances, monthly profit, 6-month trend.'), ''],
+  ];
+  return (
+    <div className="rounded-card border border-gold/40 bg-gold/10">
+      <button onClick={toggle} className="flex w-full items-center justify-between gap-2 p-3 text-start" aria-expanded={open}>
+        <span className="font-semibold text-espresso">💡 {L('إزاي أستخدم النظام؟', 'How to use this')}</span>
+        <span className="text-sm text-ink-70">{open ? L('إخفاء', 'Hide') : L('إظهار', 'Show')}</span>
+      </button>
+      {open ? (
+        <ol className="space-y-2.5 border-t border-gold/30 p-3">
+          {steps.map(([n, title, body]) => (
+            <li key={n} className="flex gap-3">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gold font-latin text-sm font-bold text-espresso">{n}</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-espresso">{title}</span>
+                <span className="block text-xs leading-relaxed text-ink-70">{body}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
+/* ───────────── المصروفات الثابتة ───────────── */
+function RecurringTab({ d }: { d: FinData }) {
+  const { L } = useLang();
+  const main = d.wallets.find((w) => w.is_main) ?? d.wallets[0];
+  const walletById = new Map<string, Wallet>(d.wallets.map((w): [string, Wallet] => [w.id, w]));
+  const catById = new Map<string, Category>(d.categories.map((c): [string, Category] => [c.id, c]));
+  const [editId, setEditId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<'expense' | 'transfer'>('expense');
+  const [amount, setAmount] = useState('');
+  const [catId, setCatId] = useState('');
+  const [walletId, setWalletId] = useState('');
+  const [toId, setToId] = useState('');
+  const [day, setDay] = useState('1');
+  const [start, setStart] = useState(todayCairo());
+
+  const startEdit = (r: Recurring | null) => {
+    setEditId(r ? r.id : 'new');
+    setName(r?.name ?? '');
+    setKind(r?.kind ?? 'expense');
+    setAmount(r ? String(r.amount) : '');
+    setCatId(r?.category_id ?? '');
+    setWalletId(r?.wallet_id ?? '');
+    setToId(r?.to_wallet_id ?? '');
+    setDay(String(r?.day_of_month ?? 1));
+    setStart(r?.start_date ?? todayCairo());
+  };
+  const save = useFinMutation(
+    async () => {
+      const n = Number(amount);
+      const dd = Math.round(Number(day));
+      if (!name.trim()) throw bad('اكتب الاسم');
+      if (!(n > 0)) throw bad('اكتب مبلغ صحيح');
+      if (!(dd >= 1 && dd <= 31)) throw bad('اليوم من 1 لـ 31');
+      const w = walletId || main?.id || null;
+      if (kind === 'transfer' && (!toId || toId === w)) throw bad('اختار محفظة الادخار (غير المحفظة المسحوب منها)');
+      const row = {
+        name: name.trim(), kind, amount: n, day_of_month: dd, start_date: start,
+        category_id: kind === 'expense' ? catId || null : null,
+        wallet_id: w, to_wallet_id: kind === 'transfer' ? toId : null,
+      };
+      const r = editId === 'new'
+        ? await untypedDb.from('fin_recurring').insert(row)
+        : await untypedDb.from('fin_recurring').update(row).eq('id', editId as string);
+      if (r.error) throw r.error;
+      // يسجّل المستحق من دلوقتي (لو اليوم عدّى)
+      try {
+        await (untypedDb.rpc as unknown as (fn: string) => Promise<unknown>)('fin_apply_recurring');
+      } catch {
+        /* ignore */
+      }
+    },
+    L('اتحفظ', 'Saved'),
+    () => setEditId(null),
+  );
+  const toggle = useFinMutation(async (r: Recurring) => {
+    const { error } = await untypedDb.from('fin_recurring').update({ is_active: !r.is_active }).eq('id', r.id);
+    if (error) throw error;
+  }, L('تمام', 'Done'));
+  const del = useFinMutation(async (id: string) => {
+    const { error } = await untypedDb.from('fin_recurring').delete().eq('id', id);
+    if (error) throw error;
+  }, L('اتمسح', 'Deleted'));
+
+  if (!d.recurringReady) {
+    return <p className="rounded-btn bg-sand/50 p-3 text-sm">{L('محتاج تشغّل ملف finance-recurring.sql في Supabase الأول.', 'Run finance-recurring.sql in Supabase first.')}</p>;
+  }
+  const monthlyTotal = d.recurring.filter((r) => r.is_active && r.kind === 'expense').reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-espresso">{L('المصروفات الثابتة', 'Recurring')}</h2>
+          <p className="text-xs text-ink-70">{L('بتتسجل لوحدها كل شهر في اليوم اللي تحدده.', 'Posted automatically each month.')}</p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={() => startEdit(null)}>{L('+ ثابت', '+ Add')}</Button>
+      </div>
+      <p className="rounded-btn bg-sand/40 p-2.5 text-sm">
+        {L('إجمالي الثابت شهرياً:', 'Fixed per month:')} <span className="font-latin font-bold text-espresso">{formatEGP(monthlyTotal)}</span>
+      </p>
+
+      {d.recurring.length === 0 ? (
+        <p className="text-sm text-ink-70">{L('لسه مفيش. جرّب تضيف الإيجار أو الإنترنت.', 'None yet. Try adding rent or internet.')}</p>
+      ) : (
+        <ul className="divide-y divide-bark/10 rounded-card border border-default bg-white">
+          {d.recurring.map((r) => (
+            <li key={r.id} className={cn('flex items-start justify-between gap-3 p-3 text-sm', !r.is_active && 'opacity-50')}>
+              <span className="min-w-0 break-words">
+                <span className="block font-medium text-espresso">{r.name}{r.kind === 'transfer' ? ` · ${L('تحويل للادخار', 'Auto-save')}` : ''}</span>
+                <span className="block text-xs text-ink-70">
+                  {L(`يوم ${r.day_of_month} كل شهر`, `Day ${r.day_of_month} monthly`)} ·{' '}
+                  {r.kind === 'transfer'
+                    ? `${(r.wallet_id && walletById.get(r.wallet_id)?.name) || ''} → ${(r.to_wallet_id && walletById.get(r.to_wallet_id)?.name) || ''}`
+                    : `${(r.category_id && catById.get(r.category_id)?.name) || L('بدون تصنيف', 'Uncategorized')} · ${(r.wallet_id && walletById.get(r.wallet_id)?.name) || ''}`}
+                </span>
+              </span>
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <span className="font-latin font-semibold">{formatEGP(r.amount)}</span>
+                <span className="flex gap-2">
+                  <button className="text-xs text-gold underline" onClick={() => startEdit(r)}>{L('تعديل', 'Edit')}</button>
+                  <button className="text-xs text-ink-70 underline" onClick={() => toggle.mutate(r)}>{r.is_active ? L('إيقاف', 'Pause') : L('تشغيل', 'Resume')}</button>
+                  <button
+                    className="text-xs text-danger underline"
+                    onClick={() => { if (window.confirm(L('تمسح الثابت ده؟ اللي اتسجّل قبل كده هيفضل.', 'Delete? Past entries stay.'))) del.mutate(r.id); }}
+                  >{L('مسح', 'Delete')}</button>
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {editId ? (
+        <Card><CardBody className="space-y-3 p-4">
+          <div className="flex gap-2">
+            {(['expense', 'transfer'] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setKind(k)}
+                className={cn('flex-1 rounded-btn px-3 py-2 text-sm font-medium', kind === k ? 'bg-gold text-espresso' : 'bg-sand/60 text-ink-70')}
+              >
+                {k === 'expense' ? L('مصروف ثابت', 'Fixed expense') : L('ادخار تلقائي', 'Auto-save')}
+              </button>
+            ))}
+          </div>
+          <Input label={L('الاسم (مثلاً: إيجار المحل)', 'Name')} value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label={L('المبلغ كل شهر', 'Monthly amount')} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          {kind === 'expense' ? (
+            <div>
+              <label className="text-sm font-medium text-ink-70">{L('التصنيف', 'Category')}</label>
+              <select className={cn(selectCls, 'mt-1')} value={catId} onChange={(e) => setCatId(e.target.value)}>
+                <option value="">— {L('اختار', 'Select')} —</option>
+                {d.categories.filter((c) => c.is_active && c.kind === 'expense').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          ) : null}
+          <div>
+            <label className="text-sm font-medium text-ink-70">{kind === 'expense' ? L('بيتخصم من', 'Paid from') : L('بيتحوّل من', 'From')}</label>
+            <select className={cn(selectCls, 'mt-1')} value={walletId || main?.id || ''} onChange={(e) => setWalletId(e.target.value)}>
+              {d.wallets.filter((w) => w.is_active).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+          {kind === 'transfer' ? (
+            <div>
+              <label className="text-sm font-medium text-ink-70">{L('إلى (الادخار أو التطوير)', 'To')}</label>
+              <select className={cn(selectCls, 'mt-1')} value={toId} onChange={(e) => setToId(e.target.value)}>
+                <option value="">— {L('اختار', 'Select')} —</option>
+                {d.wallets.filter((w) => w.is_active).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </div>
+          ) : null}
+          <Input label={L('يوم الشهر (1–31)', 'Day of month')} inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} />
+          <Input type="date" label={L('يبدأ من', 'Starts')} value={start} onChange={(e) => setStart(e.target.value)} />
+          <div className="flex gap-2">
+            <Button variant="secondary" className="w-full" onClick={() => setEditId(null)}>{L('إلغاء', 'Cancel')}</Button>
+            <Button className="w-full" loading={save.isPending} onClick={() => save.mutate(undefined as never)}>{L('حفظ', 'Save')}</Button>
+          </div>
+        </CardBody></Card>
+      ) : null}
+    </div>
+  );
+}
+
+/* ───────────── اتجاه آخر 6 شهور ───────────── */
+function Trend({ d }: { d: FinData }) {
+  const { L } = useLang();
+  const months = useMemo(() => {
+    const out: string[] = [];
+    const [y0 = 2026, m0 = 1] = todayCairo().slice(0, 7).split('-').map(Number);
+    for (let i = 5; i >= 0; i--) {
+      const t = new Date(Date.UTC(y0, m0 - 1 - i, 1));
+      out.push(`${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`);
+    }
+    return out;
+  }, []);
+  const q = useQuery({
+    queryKey: ['fin-month', 'trend', months[0]],
+    retry: false,
+    queryFn: async () => Promise.all(months.map((m) => fetchIncome(monthBounds(m).from, monthBounds(m).to))),
+  });
+  const catById = new Map<string, Category>(d.categories.map((c): [string, Category] => [c.id, c]));
+  const rows = months.map((m, i) => {
+    const { from, to } = monthBounds(m);
+    let exp = 0;
+    let extra = 0;
+    for (const t of d.txs) {
+      if (t.tx_date < from || t.tx_date > to) continue;
+      if (t.kind === 'income') extra += t.amount;
+      else if (t.kind === 'expense') {
+        const b = (t.category_id && catById.get(t.category_id)?.bucket) || 'other';
+        if (b !== 'owner_draw') exp += t.amount;
+      }
+    }
+    const inc = (q.data?.[i]?.grand_total ?? 0) + extra;
+    return { m, inc, exp, net: inc - exp };
+  });
+  const max = Math.max(1, ...rows.flatMap((r) => [r.inc, r.exp]));
+  const cur = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+  const delta = cur && prev && prev.net !== 0 ? Math.round(((cur.net - prev.net) / Math.abs(prev.net)) * 100) : null;
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-lg font-bold text-espresso">{L('آخر 6 شهور', 'Last 6 months')}</h2>
+      {delta !== null ? (
+        <p className="text-sm text-ink-70">
+          {L('صافي الربح مقارنة بالشهر اللي فات:', 'Net vs last month:')}{' '}
+          <span className={cn('font-latin font-bold', delta >= 0 ? 'text-green-700' : 'text-danger')}>{delta > 0 ? '+' : ''}{delta}%</span>
+        </p>
+      ) : null}
+      <div className="rounded-card border border-default bg-white p-3">
+        <div className="flex h-36 items-end justify-between gap-1.5" dir="ltr">
+          {rows.map((r) => (
+            <div key={r.m} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+              <div className="flex h-full w-full items-end justify-center gap-0.5">
+                <div className="w-1/2 max-w-4 rounded-t bg-gold" style={{ height: `${Math.max(2, (r.inc / max) * 100)}%` }} title={`${L('دخل', 'Income')} ${r.inc}`} />
+                <div className="w-1/2 max-w-4 rounded-t bg-bark/50" style={{ height: `${Math.max(2, (r.exp / max) * 100)}%` }} title={`${L('مصروف', 'Expenses')} ${r.exp}`} />
+              </div>
+              <span className="font-latin text-[10px] text-ink-70">{r.m.slice(5)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex gap-4 text-xs text-ink-70">
+          <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-gold" />{L('الدخل', 'Income')}</span>
+          <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-bark/50" />{L('المصروفات', 'Expenses')}</span>
+        </div>
+        <ul className="mt-2 divide-y divide-bark/10 text-xs">
+          {[...rows].reverse().map((r) => (
+            <li key={r.m} className="flex items-center justify-between gap-2 py-1.5">
+              <span className="font-latin">{r.m}</span>
+              <span className={cn('font-latin font-semibold', r.net >= 0 ? 'text-espresso' : 'text-danger')}>{L('صافي', 'Net')} {formatEGP(r.net)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
