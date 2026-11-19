@@ -16,11 +16,11 @@
     "language": "العربية",
     "signOut": "Sign out",
     "signIn": "Sign in",
-    "email": "Email",
+    "email": "Username or email",
     "password": "Password",
     "loginRequired": "Enter email and password",
     "loginFailed": "Wrong email or password",
-    "loginSubtitle": "Sign in with email and password",
+    "loginSubtitle": "Sign in with username (or email) and password",
     "adminWelcome": "tito control panel",
     "adminSecure": "Owner account only — not Google",
     "accessDenied": "Access denied",
@@ -65,7 +65,8 @@
     "groupQuick": "Shortcuts",
     "extras": "Packages & features",
     "backup": "Backup",
-    "audit": "Activity log"
+    "audit": "Activity log",
+    "cleanup": "Data cleanup"
   },
   "status": {
     "pending_payment": "Pending payment",

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabase';
 import { mapError } from '@/lib/errors';
 import { useStaff } from './StaffPage';
+import { loginMessage, useStaffPhones, waLink } from './staffLogin';
 
 const rpc = supabase.rpc.bind(supabase) as unknown as (
   fn: string,
@@ -38,6 +39,8 @@ export function StaffAccessCard() {
   const [users, setUsers] = useState<Record<string, string>>({});
   const [pwds, setPwds] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<Record<string, { user: string; pass: string }>>({});
+  const phones = useStaffPhones().data ?? {};
   const save = useMutation({
     mutationFn: async (v: { id: string; username: string; password: string }) => {
       const { error } = await rpc('admin_set_staff_login', { p_staff: v.id, p_username: v.username, p_password: v.password });
@@ -45,6 +48,7 @@ export function StaffAccessCard() {
     },
     onSuccess: (_d, v) => {
       toast.success(L('اتحفظ. اديله اسم المستخدم والباسورد.', 'Saved. Give him the username and password.'));
+      setFresh((p) => ({ ...p, [v.id]: { user: v.username.trim().toLowerCase(), pass: v.password } }));
       setPwds((p) => ({ ...p, [v.id]: '' }));
       setEditing(null);
       void qc.invalidateQueries({ queryKey: ['staff-emails'] });
@@ -87,6 +91,23 @@ export function StaffAccessCard() {
           return (
             <div key={m.id} className="space-y-2 rounded-btn border border-default p-3">
               <p className="font-semibold text-espresso">{m.name}</p>
+              {fresh[m.id] ? (
+                <div className="rounded-btn bg-gold/10 p-2 text-sm">
+                  <p className="whitespace-pre-line text-ink-70" dir={isAr ? 'rtl' : 'ltr'}>{loginMessage(m.name, fresh[m.id]?.user ?? '', fresh[m.id]?.pass ?? '', isAr)}</p>
+                  <Button
+                    size="sm"
+                    className="mt-2"
+                    disabled={!phones[m.id]}
+                    onClick={() => {
+                      const f = fresh[m.id];
+                      const url = f ? waLink(phones[m.id] ?? '', loginMessage(m.name, f.user, f.pass, isAr)) : null;
+                      if (url) window.open(url, '_blank', 'noopener');
+                    }}
+                  >
+                    {phones[m.id] ? L('ابعتهاله على واتساب', 'Send on WhatsApp') : L('ضيف رقمه من تعديل الحلاق الأول', 'Add his phone in Edit first')}
+                  </Button>
+                </div>
+              ) : null}
               {email && editing !== m.id ? (
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="min-w-0 truncate font-latin text-sm text-ink-70" dir="ltr">

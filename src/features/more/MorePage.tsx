@@ -15,7 +15,7 @@ export function MorePage() {
   const { signOut } = useAuth();
   const routineCount = (usePaymentsCount().data ?? 0) + (useUnreadBookingCount().data ?? 0) + (useWaitlistCount().data ?? 0);
   // الأساسيات (اليوم/الروتين/الحجوزات/المالية) موجودة في الشريط تحت، فمش بنكررها هنا
-  const hidden = new Set(['/', '/routine', '/more/finance', '/more/customers']);
+  const hidden = new Set(['/', '/routine', '/more/finance', '/more/walk-in']);
 
   return (
     <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-clip">

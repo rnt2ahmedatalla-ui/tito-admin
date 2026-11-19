@@ -12,6 +12,7 @@ import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { cn } from '@/lib/cn';
 import { StaffAccessCard } from './StaffAccessCard';
 import { StaffEarnings } from './StaffEarnings';
+import { loginMessage, rpcUntyped as loginRpc, saveStaffPhone, useStaffPhones, waLink } from './staffLogin';
 
 export interface StaffMember {
   id: string;
@@ -114,6 +115,9 @@ interface FormState {
   socials: Record<string, string>;
   years: string;
   photo: string;
+  phone: string;
+  username: string;
+  password: string;
 }
 type WH = { day_of_week: number; is_closed: boolean; open_time: string; close_time: string };
 type SH = { day_of_week: number; is_off: boolean; start_time: string | null; end_time: string | null };
@@ -381,7 +385,7 @@ function ServicesModal({ member, onClose }: { member: StaffMember; onClose: () =
   );
 }
 
-const EMPTY: FormState = { id: null, name: '', bio: '', bioEn: '', socials: {}, years: '', photo: '' };
+const EMPTY: FormState = { id: null, name: '', bio: '', bioEn: '', socials: {}, years: '', photo: '', phone: '', username: '', password: '' };
 
 const SOCIAL_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
   { key: 'instagram', label: 'Instagram', placeholder: '@username' },
@@ -406,6 +410,8 @@ export function StaffPage() {
   const badges = staffBadges(staffQuery.data ?? []);
   const [servicesFor, setServicesFor] = useState<StaffMember | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
+  const phones = useStaffPhones();
+  const [share, setShare] = useState<{ name: string; phone: string; user: string; pass: string } | null>(null);
   const [toDelete, setToDelete] = useState<StaffMember | null>(null);
   const [scheduleFor, setScheduleFor] = useState<StaffMember | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -424,36 +430,56 @@ export function StaffPage() {
         experience_years: f.years.trim() ? Math.max(0, Math.round(Number(f.years))) : null,
         photo: f.photo.trim() || null,
       };
+      let staffId = f.id ?? '';
       if (f.id) {
         const res = await untypedDb.from('staff').update(row).eq('id', f.id);
         if (res.error) throw res.error;
-        return;
+      } else {
+        const isFirst = (staffQuery.data?.length ?? 0) === 0;
+        const res = await untypedDb
+          .from('staff')
+          .insert({ ...row, sort: (staffQuery.data?.length ?? 0) + 1 })
+          .select('id')
+          .single();
+        if (res.error) throw res.error;
+        staffId = String(res.data?.id ?? '');
+        // أول حلاق بيتضاف = إنت، فبيتعيّن صاحب المحل تلقائي وحجوزاتك القديمة بتتسجل عليه
+        if (isFirst && staffId) {
+          const r = await loginRpc('admin_set_owner_staff', { p_staff_id: staffId });
+          if (r.error) throw new Error(r.error.message);
+        }
       }
-      const isFirst = (staffQuery.data?.length ?? 0) === 0;
-      const res = await untypedDb
-        .from('staff')
-        .insert({ ...row, sort: (staffQuery.data?.length ?? 0) + 1 })
-        .select('id')
-        .single();
-      if (res.error) throw res.error;
-      // أول حلاق بيتضاف = إنت، فبيتعيّن صاحب المحل تلقائي وحجوزاتك القديمة بتتسجل عليه
-      if (isFirst && res.data?.id) {
-        const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (
-          fn: string,
-          args: Record<string, unknown>,
-        ) => Promise<{ error: { message: string } | null }>;
-        const r = await rpcUntyped('admin_set_owner_staff', { p_staff_id: res.data.id as string });
-        if (r.error) throw r.error;
+      // رقم الحلاق (ليك إنت بس) وبيانات دخوله
+      let phoneErr = false;
+      try {
+        await saveStaffPhone(staffId, f.phone);
+      } catch {
+        phoneErr = true;
       }
+      let loginDone = false;
+      if (f.username.trim() && f.password) {
+        const r = await loginRpc('admin_set_staff_login', { p_staff: staffId, p_username: f.username, p_password: f.password });
+        if (r.error) throw new Error(r.error.message);
+        loginDone = true;
+      }
+      return { phoneErr, loginDone, name: f.name.trim(), phone: f.phone.trim(), user: f.username.trim().toLowerCase(), pass: f.password };
     },
-    onSuccess: () => {
+    onSuccess: (r) => {
       toast.success(L('اتحفظ', 'Saved'));
+      if (r.phoneErr) toast.error(L('الحلاق اتحفظ بس الرقم لأ. شغّل ملف features-v36.sql.', 'Saved, but the phone was not. Run features-v36.sql.'));
       setForm(null);
       refresh();
+      void queryClient.invalidateQueries({ queryKey: ['staff-phones'] });
+      void queryClient.invalidateQueries({ queryKey: ['staff-emails'] });
+      if (r.loginDone) setShare({ name: r.name, phone: r.phone, user: r.user, pass: r.pass });
     },
     onError: (e) =>
       toast.error(
-        (e as Error).message === 'NAME_REQUIRED' ? L('اكتب اسم الحلاق', 'Enter the name') : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again'),
+        (e as Error).message === 'NAME_REQUIRED' ? L('اكتب اسم الحلاق', 'Enter the name')
+        : /USERNAME_TAKEN/.test((e as Error).message) ? L('اسم المستخدم ده مستخدم، اختار غيره', 'Username already taken')
+        : /BAD_USERNAME/.test((e as Error).message) ? L('اسم المستخدم: 3 حروف أو أرقام إنجليزي على الأقل', 'Username: at least 3 letters/numbers')
+        : /BAD_PASSWORD/.test((e as Error).message) ? L('الباسورد 6 حروف على الأقل', 'Password: at least 6 characters')
+        : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again'),
         { description: (e as Error).message === 'NAME_REQUIRED' ? undefined : errMsg(e) },
       ),
   });
@@ -583,7 +609,7 @@ export function StaffPage() {
                 <button
                   type="button"
                   aria-label={L('تعديل', 'Edit')}
-                  onClick={() => setForm({ id: m.id, name: m.name, bio: m.bio ?? '', bioEn: m.bio_en ?? '', socials: m.socials ?? {}, years: m.experience_years?.toString() ?? '', photo: m.photo ?? '' })}
+                  onClick={() => setForm({ id: m.id, name: m.name, bio: m.bio ?? '', bioEn: m.bio_en ?? '', socials: m.socials ?? {}, years: m.experience_years?.toString() ?? '', photo: m.photo ?? '', phone: phones.data?.[m.id] ?? '', username: '', password: '' })}
                   className="flex size-9 items-center justify-center rounded-btn hover:bg-sand"
                 >
                   <Pencil className="size-4" aria-hidden />
@@ -636,6 +662,35 @@ export function StaffPage() {
               {L('الصورة بتتصغّر لحجم خفيف جداً قبل الحفظ، فمفيش أي تكلفة تخزين. ولو مفيش صورة بيظهر أول حرف من الاسم.', 'The photo is shrunk to a tiny size before saving, so storage stays free. Without a photo, the first letter shows.')}
             </p>
             <Input label={L('الاسم', 'Name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <div className="space-y-2 rounded-btn border border-gold/40 bg-gold/5 p-3">
+              <p className="text-sm font-semibold text-espresso">{L('بيانات خاصة بيك إنت بس (مش بتظهر للعملاء)', 'Private (only you see this)')}</p>
+              <Input
+                dir="ltr"
+                inputMode="tel"
+                label={L('رقم الحلاق (واتساب)', 'Barber phone (WhatsApp)')}
+                placeholder="01xxxxxxxxx"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+              <p className="pt-1 text-xs text-ink-70">
+                {L('دخوله لصفحة حجوزاته: اكتب اسم مستخدم وباسورد من عندك (سيبهم فاضيين لو مش عايز تدّيه دخول دلوقتي).', 'Sign-in to see his bookings: choose a username and password (leave empty for no login).')}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input
+                  dir="ltr"
+                  autoCapitalize="none"
+                  label={L('اسم المستخدم', 'Username')}
+                  value={form.username}
+                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                />
+                <Input
+                  dir="ltr"
+                  label={L('الباسورد', 'Password')}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
+              </div>
+            </div>
             <div className="space-y-2 rounded-btn border border-default p-3">
               <p className="text-sm font-medium text-ink-70">{L('السوشيال ميديا (اختياري، بتظهر للعميل في صفحته)', 'Social media (optional, shown on his page)')}</p>
               {SOCIAL_FIELDS.map((f) => (
@@ -677,6 +732,32 @@ export function StaffPage() {
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="ghost" onClick={() => setForm(null)}>{L('إلغاء', 'Cancel')}</Button>
               <Button loading={save.isPending} onClick={() => save.mutate(form)}>{L('حفظ', 'Save')}</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {share ? (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center p-4 lg:items-center">
+          <div className="absolute inset-0 bg-espresso/50" onClick={() => setShare(null)} aria-hidden />
+          <div className="relative w-full max-w-md space-y-3 rounded-card bg-white p-4 shadow-warm-lg">
+            <h3 className="text-lg font-semibold">{L('اتحفظ حساب الحلاق ✅', 'Barber account saved ✅')}</h3>
+            <p className="whitespace-pre-line rounded-btn bg-sand/50 p-3 text-sm" dir={isAr ? 'rtl' : 'ltr'}>
+              {loginMessage(share.name, share.user, share.pass, isAr)}
+            </p>
+            <p className="text-xs text-ink-70">{L('الباسورد بيظهر هنا مرة واحدة بس، بعد كده تقدر تغيّره بس.', 'The password is shown only now; later you can only change it.')}</p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShare(null)}>{L('إغلاق', 'Close')}</Button>
+              <Button
+                disabled={!share.phone}
+                onClick={() => {
+                  const url = waLink(share.phone, loginMessage(share.name, share.user, share.pass, isAr));
+                  if (url) window.open(url, '_blank', 'noopener');
+                  else toast.error(L('رقم الواتساب مش مظبوط (01xxxxxxxxx)', 'Invalid WhatsApp number'));
+                }}
+              >
+                {share.phone ? L('ابعتهاله على واتساب', 'Send on WhatsApp') : L('مفيش رقم', 'No phone')}
+              </Button>
             </div>
           </div>
         </div>

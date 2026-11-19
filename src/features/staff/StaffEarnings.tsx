@@ -44,6 +44,8 @@ export function StaffEarnings() {
   const qc = useQueryClient();
   const staff = (useStaff().data ?? []).filter((m) => m.is_active);
   const [offset, setOffset] = useState(0);
+  const [sel, setSel] = useState<string>('all');
+  const [sort, setSort] = useState<'revenue' | 'cuts' | 'rating' | 'name'>('revenue');
   const range = useMemo(() => monthRange(offset), [offset]);
   const [edit, setEdit] = useState<Record<string, { pct: string; sal: string }>>({});
 
@@ -136,6 +138,17 @@ export function StaffEarnings() {
     });
   }, [q.data, staff, ownerId, isAr]);
 
+  const shown = useMemo(() => {
+    const list = sel === 'all' ? stats : stats.filter((x) => x.m.id === sel);
+    const by = {
+      revenue: (a: (typeof stats)[number], b: (typeof stats)[number]) => b.revenue - a.revenue,
+      cuts: (a: (typeof stats)[number], b: (typeof stats)[number]) => b.cuts - a.cuts,
+      rating: (a: (typeof stats)[number], b: (typeof stats)[number]) => (b.rating ?? -1) - (a.rating ?? -1),
+      name: (a: (typeof stats)[number], b: (typeof stats)[number]) => a.m.name.localeCompare(b.m.name),
+    }[sort];
+    return [...list].sort(by);
+  }, [stats, sel, sort]);
+
   if (staff.length === 0) return null;
   const monthName = range.label.toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { month: 'long', year: 'numeric' });
 
@@ -155,13 +168,36 @@ export function StaffEarnings() {
         <p className="text-xs text-ink-70">
           {monthName} — {L('الإيراد = أسعار الحلاقات اللي اتعملت فعلاً (حالة "تمت"). المستحق = المرتب الثابت + النسبة × الإيراد.', 'Revenue = completed bookings. Due = base salary + commission × revenue.')}
         </p>
+        <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" variant={sel === 'all' ? 'primary' : 'secondary'} onClick={() => setSel('all')}>{L('الكل', 'All')}</Button>
+          {staff.map((m) => (
+            <Button key={m.id} size="sm" variant={sel === m.id ? 'primary' : 'secondary'} onClick={() => setSel(m.id)}>
+              {m.name}
+            </Button>
+          ))}
+        </div>
+        {sel === 'all' && staff.length > 1 ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-70">
+            <span>{L('الترتيب:', 'Sort:')}</span>
+            {([['revenue', L('الإيراد', 'Revenue')], ['cuts', L('عدد الحلاقات', 'Cuts')], ['rating', L('التقييم', 'Rating')], ['name', L('الاسم', 'Name')]] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setSort(k)}
+                className={cn('min-h-8 rounded-pill border px-3 text-xs', sort === k ? 'border-gold bg-gold/20 font-semibold text-espresso' : 'border-default')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {q.isLoading ? (
           <Skeleton className="h-40" />
         ) : q.isError ? (
           <p className="text-sm text-danger">{L('مقدرناش نحمّل البيانات.', 'Could not load data.')}</p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {stats.map((s) => {
+          <div className={cn("grid gap-3", sel === "all" && "md:grid-cols-2")}>
+            {shown.map((s) => {
               const c = comm.data?.find((x) => x.id === s.m.id);
               const pct = c?.commission_pct ?? 0;
               const sal = c?.base_salary ?? 0;
