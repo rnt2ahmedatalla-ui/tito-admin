@@ -326,10 +326,10 @@ export function TodayPage() {
     return { dayStr, isClosed, openMin, closeMin, dayBreaks, dayOff, dayBounds, dayStart, dayEnd, coversFullDay };
   };
 
-  const handleSlotClick = (day: Date, hour: number) => {
+  const handleSlotClick = (day: Date, hour: number, minute = 0) => {
     const dateStr = cairoDateString(day);
     const pad = (n: number) => String(n).padStart(2, '0');
-    const localIso = `${dateStr}T${pad(hour)}:00:00`;
+    const localIso = `${dateStr}T${pad(hour)}:${pad(minute)}:00`;
     setWalkInDate(dateStr);
     setWalkInTime(fromCairoLocal(new Date(localIso)).toISOString());
     setWalkInOpen(true);
@@ -632,7 +632,13 @@ export function TodayPage() {
                           <div
                             key={hour}
                             style={{ top: hIdx * HOUR_HEIGHT }}
-                            onClick={() => handleSlotClick(day, hour)}
+                            onClick={(e) => {
+                              // مكان الضغطة جوه الساعة بيحدد الدقيقة (كل 15 دقيقة)
+                              const r = e.currentTarget.getBoundingClientRect();
+                              const frac = r.height > 0 ? (e.clientY - r.top) / r.height : 0;
+                              const minute = Math.min(45, Math.max(0, Math.floor(frac * 4) * 15));
+                              handleSlotClick(day, hour, minute);
+                            }}
                             title={t('today.tapToBook')}
                             className="group absolute inset-x-0 h-20 cursor-pointer border-b border-bark/10 transition-colors hover:bg-gold/10"
                           >
