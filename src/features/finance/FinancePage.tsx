@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { untypedDb } from '@/features/payments/useFinanceBoxes';
-import { formatEGP } from '@/lib/money';
+import { formatEGP as baseEGP } from '@/lib/money';
+
+// علامة اتجاه علشان الرقم السالب يظهر صح في العربي (-610 مش 610-)
+const formatEGP = (n: number) => `\u200E${baseEGP(n)}`;
 import { cn } from '@/lib/cn';
 import {
   BUCKET_LABEL,
@@ -19,6 +22,7 @@ import {
   useFinData,
   type Bucket,
   type AllocItem,
+  type Asset,
   type Category,
   type StockItem,
   type Recurring,
@@ -27,7 +31,7 @@ import {
   type WalletKind,
 } from './useFinance';
 
-type TabId = 'overview' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'wallets' | 'closing' | 'categories';
+type TabId = 'overview' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'assets' | 'reports' | 'wallets' | 'closing' | 'categories';
 
 const selectCls = 'min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm text-espresso';
 
@@ -55,6 +59,12 @@ function useFinMutation<T>(fn: (v: T) => Promise<void>, okMsg: string, after?: (
 }
 const bad = (msg: string) => new Error(`MSG:${msg}`);
 
+function addDaysStr(ymd: string, days: number) {
+  const [y = 2026, m = 1, dd = 1] = ymd.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, dd + days));
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
+}
+
 export function FinancePage() {
   const { L } = useLang();
   const [tab, setTab] = useState<TabId>('overview');
@@ -66,6 +76,8 @@ export function FinancePage() {
     { id: 'recurring', label: L('الثابتة', 'Recurring') },
     { id: 'budget', label: L('الميزانية', 'Budget') },
     { id: 'inventory', label: L('المخزون', 'Inventory') },
+    { id: 'assets', label: L('الأصول والصيانة', 'Assets') },
+    { id: 'reports', label: L('التقارير', 'Reports') },
     { id: 'wallets', label: L('المحافظ', 'Wallets') },
     { id: 'closing', label: L('الإقفال اليومي', 'Daily closing') },
     { id: 'categories', label: L('التصنيفات', 'Categories') },
@@ -82,10 +94,10 @@ export function FinancePage() {
   const d = q.data;
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="w-full min-w-0 max-w-full space-y-4 overflow-x-clip">
       <h1 className="text-xl font-bold text-espresso">{L('المالية', 'Finance')}</h1>
       <Guide />
-      <div role="tablist" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div role="tablist" className="flex w-full max-w-full gap-2 overflow-x-auto pb-1">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -113,6 +125,10 @@ export function FinancePage() {
         <BudgetTab d={d} />
       ) : tab === 'inventory' ? (
         <InventoryTab d={d} />
+      ) : tab === 'assets' ? (
+        <AssetsTab d={d} />
+      ) : tab === 'reports' ? (
+        <ReportsTab d={d} />
       ) : tab === 'wallets' ? (
         <Wallets d={d} />
       ) : tab === 'closing' ? (
@@ -156,6 +172,11 @@ function Overview({ d }: { d: FinData }) {
 
   return (
     <div className="space-y-5">
+      {d.assets.filter((x) => x.is_active && x.next_service_date && x.next_service_date <= addDaysStr(todayCairo(), 7)).length > 0 ? (
+        <p className="rounded-btn border border-amber-400/50 bg-amber-50 p-3 text-sm text-amber-900">
+          🔧 {L('صيانة مستحقة قريب:', 'Service due soon:')} {d.assets.filter((x) => x.is_active && x.next_service_date && x.next_service_date <= addDaysStr(todayCairo(), 7)).map((x) => x.name).join('، ')}
+        </p>
+      ) : null}
       {d.items.filter((i) => i.is_active && i.qty <= i.min_qty).length > 0 ? (
         <p className="rounded-btn border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
           ⚠️ {L('مخزون قرّب يخلص:', 'Low stock:')} {d.items.filter((i) => i.is_active && i.qty <= i.min_qty).map((i) => i.name).join('، ')}
@@ -1300,6 +1321,281 @@ function InventoryTab({ d }: { d: FinData }) {
           </div>
         </CardBody></Card>
       ) : null}
+    </div>
+  );
+}
+
+/* ───────────── الأصول والصيانة ───────────── */
+function AssetsTab({ d }: { d: FinData }) {
+  const { L } = useLang();
+  const main = d.wallets.find((w) => w.is_main) ?? d.wallets[0];
+  const maintCat = d.categories.find((c) => c.kind === 'expense' && c.name.includes('صيانة'));
+  const [editId, setEditId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [cost, setCost] = useState('');
+  const [bought, setBought] = useState('');
+  const [every, setEvery] = useState('');
+  const [next, setNext] = useState('');
+  const [note, setNote] = useState('');
+
+  const startEdit = (a: Asset | null) => {
+    setEditId(a ? a.id : 'new');
+    setName(a?.name ?? '');
+    setCost(a ? String(a.cost) : '');
+    setBought(a?.purchase_date ?? '');
+    setEvery(a?.service_every_days ? String(a.service_every_days) : '');
+    setNext(a?.next_service_date ?? '');
+    setNote(a?.note ?? '');
+  };
+  const save = useFinMutation(
+    async () => {
+      if (!name.trim()) throw bad('اكتب اسم الجهاز');
+      const ev = Math.round(Number(every)) || null;
+      const row = {
+        name: name.trim(), cost: Number(cost) || 0, purchase_date: bought || null, service_every_days: ev,
+        next_service_date: next || (ev ? addDaysStr(todayCairo(), ev) : null), note: note.trim() || null,
+      };
+      const r = editId === 'new'
+        ? await untypedDb.from('fin_assets').insert(row)
+        : await untypedDb.from('fin_assets').update(row).eq('id', editId as string);
+      if (r.error) throw r.error;
+    },
+    L('اتحفظ', 'Saved'),
+    () => setEditId(null),
+  );
+  const toggle = useFinMutation(async (a: Asset) => {
+    const { error } = await untypedDb.from('fin_assets').update({ is_active: !a.is_active }).eq('id', a.id);
+    if (error) throw error;
+  }, L('تمام', 'Done'));
+  const serviced = useFinMutation(async (a: Asset) => {
+    const costTxt = window.prompt(L('تكلفة الصيانة (سيبها فاضية لو مفيش)', 'Service cost (leave empty if none)'), '');
+    if (costTxt === null) throw bad('اتلغت');
+    const c = Number(costTxt) || 0;
+    if (c > 0 && main) {
+      const t = await untypedDb.from('fin_transactions').insert({
+        tx_date: todayCairo(), kind: 'expense', amount: c, wallet_id: main.id, category_id: maintCat?.id ?? null, note: `صيانة: ${a.name}`,
+      });
+      if (t.error) throw t.error;
+    }
+    const nextDate = a.service_every_days ? addDaysStr(todayCairo(), a.service_every_days) : null;
+    const { error } = await untypedDb.from('fin_assets').update({ next_service_date: nextDate }).eq('id', a.id);
+    if (error) throw error;
+  }, L('اتسجّلت الصيانة', 'Service recorded'));
+
+  if (!d.assetsReady) {
+    return <p className="rounded-btn bg-sand/50 p-3 text-sm">{L('محتاج تشغّل ملف finance-f5.sql في Supabase الأول.', 'Run finance-f5.sql first.')}</p>;
+  }
+  const today = todayCairo();
+  const totalValue = d.assets.filter((a) => a.is_active).reduce((s, a) => s + a.cost, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-espresso">{L('الأصول والصيانة', 'Assets & maintenance')}</h2>
+          <p className="text-xs text-ink-70">{L('أجهزة المحل (ماكينات، كراسي، تكييف...) وتذكير بموعد صيانتها.', 'Equipment and service reminders.')}</p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={() => startEdit(null)}>{L('+ جهاز', '+ Asset')}</Button>
+      </div>
+      <p className="text-sm text-ink-70">{L('إجمالي تكلفة الأصول:', 'Total asset cost:')} <span className="font-latin font-bold text-espresso">{formatEGP(totalValue)}</span></p>
+
+      {d.assets.length === 0 ? (
+        <p className="text-sm text-ink-70">{L('لسه مفيش أجهزة.', 'No assets yet.')}</p>
+      ) : (
+        <ul className="divide-y divide-bark/10 rounded-card border border-default bg-white">
+          {d.assets.map((a) => {
+            const due = a.is_active && a.next_service_date && a.next_service_date <= today;
+            const soon = a.is_active && a.next_service_date && !due && a.next_service_date <= addDaysStr(today, 7);
+            return (
+              <li key={a.id} className={cn('space-y-2 p-3 text-sm', !a.is_active && 'opacity-50')}>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 break-words font-medium text-espresso">{a.name}</span>
+                  <span className="shrink-0 font-latin text-xs text-ink-70">{formatEGP(a.cost)}</span>
+                </div>
+                {a.next_service_date ? (
+                  <p className={cn('text-xs', due ? 'font-semibold text-danger' : soon ? 'font-semibold text-amber-700' : 'text-ink-70')}>
+                    🔧 {L('الصيانة الجاية:', 'Next service:')} <span className="font-latin">{a.next_service_date}</span>
+                    {due ? ` · ${L('متأخرة', 'overdue')}` : soon ? ` · ${L('قريب', 'soon')}` : ''}
+                  </p>
+                ) : null}
+                {a.note ? <p className="break-words text-xs text-ink-70">{a.note}</p> : null}
+                <div className="flex flex-wrap gap-3 text-xs">
+                  {a.next_service_date ? <button className="rounded-btn bg-gold/20 px-2.5 py-1 font-medium" onClick={() => serviced.mutate(a)}>{L('تمت الصيانة', 'Serviced')}</button> : null}
+                  <button className="text-gold underline" onClick={() => startEdit(a)}>{L('تعديل', 'Edit')}</button>
+                  <button className="text-ink-70 underline" onClick={() => toggle.mutate(a)}>{a.is_active ? L('إخفاء', 'Hide') : L('إظهار', 'Show')}</button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {editId ? (
+        <Card><CardBody className="space-y-3 p-4">
+          <Input label={L('اسم الجهاز', 'Name')} value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label={L('التكلفة', 'Cost')} inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
+          <Input type="date" label={L('تاريخ الشراء (اختياري)', 'Purchase date')} value={bought} onChange={(e) => setBought(e.target.value)} />
+          <Input label={L('صيانة كل كام يوم (اختياري)', 'Service every N days')} inputMode="numeric" value={every} onChange={(e) => setEvery(e.target.value)} />
+          <Input type="date" label={L('موعد الصيانة الجاية (اختياري)', 'Next service')} value={next} onChange={(e) => setNext(e.target.value)} />
+          <Input label={L('ملاحظة', 'Note')} value={note} onChange={(e) => setNote(e.target.value)} />
+          <div className="flex gap-2">
+            <Button variant="secondary" className="w-full" onClick={() => setEditId(null)}>{L('إلغاء', 'Cancel')}</Button>
+            <Button className="w-full" loading={save.isPending} onClick={() => save.mutate(undefined as never)}>{L('حفظ', 'Save')}</Button>
+          </div>
+        </CardBody></Card>
+      ) : null}
+    </div>
+  );
+}
+
+/* ───────────── التقارير والتصدير ───────────── */
+type BookingRow = { service_name_ar: string | null; service_name_en: string | null; price_egp: number | string; duration_minutes: number | null; status: string };
+
+function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
+  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = '﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function ReportsTab({ d }: { d: FinData }) {
+  const { L, isAr } = useLang();
+  const [ym, setYm] = useState(todayCairo().slice(0, 7));
+  const { from, to } = monthBounds(ym);
+  const incomeQ = useQuery({ queryKey: ['fin-month', from, to], queryFn: () => fetchIncome(from, to), retry: false });
+  const bookingsQ = useQuery({
+    queryKey: ['fin-month', 'bookings', from, to],
+    retry: false,
+    queryFn: async (): Promise<BookingRow[]> => {
+      const { data, error } = await untypedDb
+        .from('bookings')
+        .select('service_name_ar, service_name_en, price_egp, duration_minutes, status')
+        .eq('status', 'completed')
+        .gte('start_at', `${from}T00:00:00+02:00`)
+        .lte('start_at', `${to}T23:59:59+02:00`);
+      if (error) throw error;
+      return (data ?? []) as BookingRow[];
+    },
+  });
+
+  const catById = new Map<string, Category>(d.categories.map((c): [string, Category] => [c.id, c]));
+  const walletById = new Map<string, Wallet>(d.wallets.map((w): [string, Wallet] => [w.id, w]));
+  const monthTx = d.txs.filter((t) => t.tx_date >= from && t.tx_date <= to);
+  let exp = 0;
+  let extra = 0;
+  for (const t of monthTx) {
+    if (t.kind === 'income') extra += t.amount;
+    if (t.kind === 'expense' && (t.category_id ? catById.get(t.category_id)?.bucket : 'other') !== 'owner_draw') exp += t.amount;
+  }
+  const income = (incomeQ.data?.grand_total ?? 0) + extra;
+  const net = income - exp;
+  const count = bookingsQ.data?.length ?? 0;
+  const bookingsRevenue = (bookingsQ.data ?? []).reduce((s, b) => s + Number(b.price_egp), 0);
+  const avgTicket = count > 0 ? bookingsRevenue / count : 0;
+  const fixedMonthly = d.recurring.filter((r) => r.is_active && r.kind === 'expense').reduce((s, r) => s + r.amount, 0);
+  const breakEven = avgTicket > 0 ? Math.ceil(fixedMonthly / avgTicket) : null;
+
+  const byService = new Map<string, { name: string; n: number; rev: number; mins: number }>();
+  for (const b of bookingsQ.data ?? []) {
+    const name = (isAr ? b.service_name_ar : b.service_name_en) || b.service_name_ar || '—';
+    const cur = byService.get(name) ?? { name, n: 0, rev: 0, mins: 0 };
+    cur.n += 1;
+    cur.rev += Number(b.price_egp);
+    cur.mins += Number(b.duration_minutes ?? 0);
+    byService.set(name, cur);
+  }
+  const services = [...byService.values()].sort((a, b) => b.rev - a.rev);
+
+  const exportTx = () => {
+    const rows: Array<Array<string | number>> = [['التاريخ', 'النوع', 'التصنيف', 'المحفظة', 'إلى محفظة', 'المبلغ', 'ملاحظة']];
+    const kindAr: Record<string, string> = { expense: 'مصروف', income: 'دخل', transfer: 'تحويل', adjust: 'تسوية' };
+    for (const t of [...monthTx].sort((a, b) => a.tx_date.localeCompare(b.tx_date))) {
+      rows.push([
+        t.tx_date, kindAr[t.kind] ?? t.kind, (t.category_id && catById.get(t.category_id)?.name) || '',
+        (t.wallet_id && walletById.get(t.wallet_id)?.name) || '', (t.to_wallet_id && walletById.get(t.to_wallet_id)?.name) || '', t.amount, t.note ?? '',
+      ]);
+    }
+    downloadCsv(`tito-finance-${ym}.csv`, rows);
+  };
+  const exportSummary = () => {
+    const rows: Array<Array<string | number>> = [
+      ['البند', 'القيمة'],
+      ['الشهر', ym],
+      ['الدخل', income],
+      ['المصروفات', exp],
+      ['صافي الربح', net],
+      ['عدد الحجوزات المكتملة', count],
+      ['متوسط قيمة الحجز', Math.round(avgTicket)],
+      [],
+      ['الخدمة', 'عدد', 'الإيراد', 'الإيراد لكل ساعة'],
+      ...services.map((s): Array<string | number> => [s.name, s.n, s.rev, s.mins > 0 ? Math.round((s.rev / s.mins) * 60) : 0]),
+    ];
+    downloadCsv(`tito-report-${ym}.csv`, rows);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h2 className="text-lg font-bold text-espresso">{L('التقارير', 'Reports')}</h2>
+        <Input type="month" label={L('الشهر', 'Month')} value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <Card><CardBody className="p-3">
+          <p className="text-xs text-ink-70">{L('صافي الربح', 'Net profit')}</p>
+          <p className="mt-1 font-latin text-lg font-bold text-espresso">{formatEGP(net)}</p>
+        </CardBody></Card>
+        <Card><CardBody className="p-3">
+          <p className="text-xs text-ink-70">{L('حجوزات مكتملة', 'Completed bookings')}</p>
+          <p className="mt-1 font-latin text-lg font-bold text-espresso">{count}</p>
+        </CardBody></Card>
+        <Card><CardBody className="p-3">
+          <p className="text-xs text-ink-70">{L('متوسط قيمة الحجز', 'Average ticket')}</p>
+          <p className="mt-1 font-latin text-lg font-bold text-espresso">{formatEGP(Math.round(avgTicket))}</p>
+        </CardBody></Card>
+        <Card className="border-gold/40 bg-gold/10"><CardBody className="p-3">
+          <p className="text-xs text-ink-70">{L('نقطة التعادل', 'Break-even')}</p>
+          <p className="mt-1 font-latin text-lg font-bold text-espresso">{breakEven === null ? '—' : breakEven}</p>
+          <p className="text-[11px] text-ink-70">{L(`حجز في الشهر يغطي ثابت ${formatEGP(fixedMonthly)}`, `bookings/month to cover ${formatEGP(fixedMonthly)} fixed`)}</p>
+        </CardBody></Card>
+      </div>
+
+      <section className="space-y-2">
+        <h3 className="font-semibold text-espresso">{L('الإيراد لكل خدمة', 'Revenue by service')}</h3>
+        {services.length === 0 ? (
+          <p className="text-sm text-ink-70">{L('مفيش حجوزات مكتملة الشهر ده.', 'No completed bookings this month.')}</p>
+        ) : (
+          <ul className="divide-y divide-bark/10 rounded-card border border-default bg-white">
+            {services.map((s) => (
+              <li key={s.name} className="space-y-0.5 p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 break-words font-medium text-espresso">{s.name}</span>
+                  <span className="shrink-0 font-latin font-semibold">{formatEGP(s.rev)}</span>
+                </div>
+                <p className="text-xs text-ink-70">
+                  <span className="font-latin">{s.n}</span> {L('مرة', 'times')}
+                  {s.mins > 0 ? <> · {L('الإيراد لكل ساعة شغل', 'per hour of work')} <span className="font-latin">{formatEGP(Math.round((s.rev / s.mins) * 60))}</span></> : null}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-ink-70">{L('"الإيراد لكل ساعة" بيساعدك تعرف أنهي خدمة أربح لوقتك.', '"Per hour" shows which service pays best for your time.')}</p>
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="font-semibold text-espresso">{L('تصدير (يفتح في Excel)', 'Export (opens in Excel)')}</h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button variant="secondary" onClick={exportTx}>{L('حركات الشهر (CSV)', 'Month transactions (CSV)')}</Button>
+          <Button variant="secondary" onClick={exportSummary}>{L('ملخص الشهر (CSV)', 'Month summary (CSV)')}</Button>
+        </div>
+      </section>
     </div>
   );
 }
