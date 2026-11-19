@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Calendar,
   ClipboardCheck,
-  List,
+  Users,
   Wallet,
   MoreHorizontal,
   Globe,
@@ -15,6 +15,7 @@ import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import { navGroups } from '@/components/layout/navConfig';
 import { CountBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useWaitlistCount } from '@/features/extras/useWaitlistCount';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
 import { setLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
@@ -26,7 +27,7 @@ import { useGlobalShortcuts } from '@/hooks/useKeyboardShortcuts';
 const mainTabs = [
   { to: '/', icon: Calendar, labelKey: 'nav.today' },
   { to: '/routine', icon: ClipboardCheck, labelKey: 'nav.routineShort', badge: 'routine' as const },
-  { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
+  { to: '/more/customers', icon: Users, labelKey: 'nav.customers' },
   { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
   { to: '/more', icon: MoreHorizontal, labelKey: 'nav.more' },
 ];
@@ -57,7 +58,8 @@ export function AppShell() {
   const { signOut } = useAuth();
   const { data: paymentsCount = 0 } = usePaymentsCount();
   const { data: remindersCount = 0 } = useUnreadBookingCount();
-  const badgeFor = (b?: 'routine') => (b === 'routine' ? paymentsCount + remindersCount : 0);
+  const { data: waitCount = 0 } = useWaitlistCount();
+  const badgeFor = (b?: 'routine') => (b === 'routine' ? paymentsCount + remindersCount + waitCount : 0);
   const location = useLocation();
   const [showHelp, setShowHelp] = useState(false);
 

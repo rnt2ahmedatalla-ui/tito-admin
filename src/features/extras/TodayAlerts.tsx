@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { TriangleAlert, ChevronDown, ChevronUp } from 'lucide-react';
 import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { useFinData } from '@/features/finance/useFinance';
 import { cairoDayBounds, cairoDateString } from '@/lib/time';
 import { cn } from '@/lib/cn';
+import { useWaitlistCount } from './useWaitlistCount';
 import { lastBackupAgeDays } from '@/features/backup/backupLib';
 
 type Alert = { key: string; text: string; to: string; tone: 'warn' | 'info' };
@@ -18,6 +19,7 @@ export function TodayAlerts() {
   const L = (ar: string, en: string) => (isAr ? ar : en);
   const [open, setOpen] = useState(true);
   const fin = useFinData();
+  const waitN = useWaitlistCount().data ?? 0;
 
   const late = useQuery({
     queryKey: ['alerts-late-payments'],
@@ -59,6 +61,7 @@ export function TodayAlerts() {
 
   const alerts: Alert[] = [];
   const n = late.data ?? 0;
+  if (waitN > 0) alerts.push({ key: 'wait', tone: 'warn', to: '/routine?t=waitlist', text: L(`${waitN} عميل مستني في قايمة الانتظار`, `${waitN} customer(s) on the waiting list`) });
   if (n > 0) alerts.push({ key: 'late', tone: 'warn', to: '/routine?t=payments', text: L(`${n} دفعة مستنية أكتر من ساعتين`, `${n} payment(s) waiting over 2 hours`) });
 
   const d = fin.data;
@@ -88,7 +91,7 @@ export function TodayAlerts() {
     <div className="rounded-card border border-gold/40 bg-gold/10">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-start">
         <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-espresso">
-          <AlertTriangle className="size-4 shrink-0 text-gold" aria-hidden />
+          <TriangleAlert className="size-4 shrink-0 text-gold" aria-hidden />
           {L('تنبيهات', 'Alerts')} <span className="font-latin">({alerts.length})</span>
         </span>
         {open ? <ChevronUp className="size-4 shrink-0 text-ink-70" /> : <ChevronDown className="size-4 shrink-0 text-ink-70" />}

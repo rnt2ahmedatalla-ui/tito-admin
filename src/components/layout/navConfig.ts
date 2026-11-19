@@ -32,7 +32,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: '/', icon: Calendar, labelKey: 'nav.today' },
       { to: '/routine', icon: ClipboardCheck, labelKey: 'nav.routine', badge: 'routine' },
-      { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
       { to: '/more/walk-in', icon: UserPlus, labelKey: 'nav.walkIn' },
     ],
   },
@@ -48,6 +47,7 @@ export const navGroups: NavGroup[] = [
     titleKey: 'nav.groupCustomers',
     items: [
       { to: '/more/customers', icon: Users, labelKey: 'nav.customers' },
+      { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
       { to: '/more/reviews', icon: Star, labelKey: 'nav.reviews' },
       { to: '/more/loyalty', icon: Gift, labelKey: 'nav.loyalty' },
       { to: '/more/coupons', icon: Ticket, labelKey: 'nav.coupons' },

@@ -29,6 +29,9 @@ export function notificationHref(n: Pick<AdminNotification, 'kind' | 'entity'>):
       ? '/more/products#product-orders'
       : '/payments';
   }
+  if (kind.startsWith('waitlist') || entity === 'waitlist') {
+    return '/routine?t=waitlist';
+  }
   if (kind.startsWith('booking') || entity === 'booking') {
     return '/bookings';
   }

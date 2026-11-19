@@ -58,7 +58,10 @@ export function WaitlistTab() {
       const { error } = await untypedDb.from('waitlist').update({ status }).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['waitlist-admin'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['waitlist-admin'] });
+      void qc.invalidateQueries({ queryKey: ['waitlist-count'] });
+    },
     onError: (e) => toast.error(mapError(e, t)),
   });
 

@@ -55,9 +55,9 @@ export function AuditPage() {
     queryKey: ['audit-log', limit, table],
     retry: false,
     queryFn: async (): Promise<Row[]> => {
-      let query = untypedDb.from('audit_log').select('id, at, table_name, op, row_id, changes').order('at', { ascending: false }).limit(limit);
-      if (table) query = query.eq('table_name', table);
-      const { data, error } = await query;
+      const base = untypedDb.from('audit_log').select('id, at, table_name, op, row_id, changes');
+      const filtered = table ? base.eq('table_name', table) : base;
+      const { data, error } = await filtered.order('at', { ascending: false }).limit(limit);
       if (error) throw error;
       return (data ?? []) as Row[];
     },
