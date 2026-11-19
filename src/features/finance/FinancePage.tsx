@@ -72,7 +72,11 @@ function addDaysStr(ymd: string, days: number) {
 export function FinancePage() {
   const { L } = useLang();
   const [sp] = useSearchParams();
-  const [tab, setTab] = useState<TabId>(sp.get('tab') === 'bookingsReport' ? 'bookingsReport' : 'overview');
+  const [tab, setTab] = useState<TabId>(() => {
+    const asked = sp.get('tab') as TabId | null;
+    const ok: TabId[] = ['bookingsReport', 'overview', 'income', 'transfers', 'expenses', 'recurring', 'budget', 'inventory', 'assets', 'reports', 'wallets', 'closing', 'categories'];
+    return asked && ok.includes(asked) ? asked : 'overview';
+  });
   const q = useFinData();
 
   const tabs: Array<{ id: TabId; label: string }> = [

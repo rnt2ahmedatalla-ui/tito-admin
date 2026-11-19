@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatEGP } from '@/lib/money';
 import { toCairo, cairoDateString } from '@/lib/time';
+import { InsightsSection } from './InsightsSection';
 
 type Profile = { full_name: string | null; phone: string | null };
 type Row = {
@@ -174,7 +175,7 @@ export function ReportsPage() {
   const empty = <p className="text-sm text-ink-70">{isAr ? 'مفيش بيانات في الفترة دي' : 'No data in this period'}</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="w-full min-w-0 max-w-full space-y-4 overflow-x-clip">
       <h1 className="text-xl font-bold text-espresso">{isAr ? 'تقارير الحجوزات' : 'Booking reports'}</h1>
 
       <Card>
@@ -263,6 +264,8 @@ export function ReportsPage() {
           <Line key={d} left={d} right={formatEGP(sum)} />
         ))}
       </Block>
+
+      <InsightsSection />
     </div>
   );
 }

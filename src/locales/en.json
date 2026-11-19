@@ -63,7 +63,9 @@
     "groupSystem": "System",
     "routineShort": "Routine",
     "groupQuick": "Shortcuts",
-    "extras": "Packages & features"
+    "extras": "Packages & features",
+    "backup": "Backup",
+    "audit": "Activity log"
   },
   "status": {
     "pending_payment": "Pending payment",

@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { cn } from '@/lib/cn';
+import { StaffAccessCard } from './StaffAccessCard';
 
 export interface StaffMember {
   id: string;
@@ -679,6 +680,8 @@ export function StaffPage() {
           </div>
         </div>
       ) : null}
+
+      <StaffAccessCard />
 
       {servicesFor ? <ServicesModal member={servicesFor} onClose={() => setServicesFor(null)} /> : null}
       {scheduleFor ? <ScheduleModal member={scheduleFor} onClose={() => setScheduleFor(null)} /> : null}

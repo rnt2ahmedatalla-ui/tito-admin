@@ -47,7 +47,7 @@ function Toggles() {
   const qc = useQueryClient();
   const flags = useFeatureFlags();
   const save = useMutation({
-    mutationFn: async (patch: Record<string, boolean>) => {
+    mutationFn: async (patch: Record<string, boolean | number>) => {
       const { error } = await untypedDb.from('feature_settings').update(patch).eq('id', 1);
       if (error) throw error;
     },
@@ -75,6 +75,16 @@ function Toggles() {
       hint: L('بيظهر للعميل في الصفحة الرئيسية: لو جيت دلوقتي هتستنى تقريباً كام دقيقة.', 'Shows customers on the home page roughly how long they would wait if they came now.'),
     },
   ];
+  const [days, setDays] = useState<string | null>(null);
+  const [prepay, setPrepay] = useState<string | null>(null);
+  const saveNum = (key: string, raw: string, min: number, max: number) => {
+    const n = Math.round(Number(raw));
+    if (!(n >= min && n <= max)) {
+      toast.error(L(`اكتب رقم من ${min} لـ ${max}`, `Enter a number from ${min} to ${max}`));
+      return;
+    }
+    save.mutate({ [key]: n });
+  };
   if (flags.isError) return null;
   return (
     <Card>
@@ -94,6 +104,55 @@ function Toggles() {
             />
           </label>
         ))}
+        <div className="space-y-2 p-4">
+          <label className="flex items-start justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block font-semibold text-espresso">{L('بانر "وحشتنا" للعميل', '"We miss you" banner')}</span>
+              <span className="mt-0.5 block text-xs text-ink-70">
+                {L('بيظهر للعميل في موقعك وبيعد الأيام من آخر حلاقة، ويختفي أول ما يحجز، ويرجع بعد المدة اللي تحددها من آخر حلاقة.', 'Shown on the site; counts days since the last cut, hides once he books, and returns after the period you set.')}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="mt-1 size-5 shrink-0 accent-[#c9953f]"
+              checked={!!f?.inactiveBanner}
+              disabled={save.isPending || !f}
+              onChange={(e) => save.mutate({ inactive_banner_enabled: e.target.checked })}
+            />
+          </label>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                label={L('يظهر بعد كام يوم من آخر حلاقة', 'Show after how many days')}
+                inputMode="numeric"
+                value={days ?? String(f?.inactiveAfterDays ?? 28)}
+                onChange={(e) => setDays(e.target.value)}
+              />
+            </div>
+            <Button variant="secondary" loading={save.isPending} onClick={() => saveNum('inactive_after_days', days ?? String(f?.inactiveAfterDays ?? 28), 3, 365)}>
+              {L('حفظ', 'Save')}
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2 p-4">
+          <p className="font-semibold text-espresso">{L('دفع مقدّم لمن غاب كتير', 'Prepayment for repeat no-shows')}</p>
+          <p className="text-xs text-ink-70">
+            {L('العميل اللي غاب العدد ده من المرات أو أكتر مبيقدرش يختار "الدفع في المحل" ولازم يدفع أونلاين قبل الحجز. اكتب 0 لو عايز تقفلها.', 'Customers who missed this many bookings must pay online (no pay-at-shop). Enter 0 to turn off.')}
+          </p>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                label={L('بعد كام غياب (0 = مقفول)', 'After how many no-shows (0 = off)')}
+                inputMode="numeric"
+                value={prepay ?? String(f?.noshowPrepayAfter ?? 0)}
+                onChange={(e) => setPrepay(e.target.value)}
+              />
+            </div>
+            <Button variant="secondary" loading={save.isPending} onClick={() => saveNum('noshow_prepay_after', prepay ?? String(f?.noshowPrepayAfter ?? 0), 0, 50)}>
+              {L('حفظ', 'Save')}
+            </Button>
+          </div>
+        </div>
       </CardBody>
     </Card>
   );

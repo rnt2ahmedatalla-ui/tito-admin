@@ -15,8 +15,13 @@ import { supabase } from '@/lib/supabase';
 
 type AuthState = 'loading' | 'unauthenticated' | 'denied' | 'authenticated';
 
+export type AuthRole = 'admin' | 'staff';
+
 interface AuthContextValue {
   state: AuthState;
+  /** admin = كل الصلاحيات، staff = حلاق يشوف حجوزاته بس */
+  role: AuthRole;
+  staffId: string | null;
   user: User | null;
   session: Session | null;
   signInWithPassword: (email: string, password: string) => Promise<void>;
@@ -33,6 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const [state, setState] = useState<AuthState>('loading');
+  const [role, setRole] = useState<AuthRole>('admin');
+  const [staffId, setStaffId] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [showIdleWarning, setShowIdleWarning] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -69,6 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (!data) {
+        // مش أدمن: يمكن يكون حلاق عنده حساب مربوط (بيشوف حجوزاته بس)
+        const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (
+          fn: string,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+        const staff = await rpcUntyped('current_staff_id');
+        if (!staff.error && typeof staff.data === 'string' && staff.data) {
+          setRole('staff');
+          setStaffId(staff.data);
+          setSession(sess);
+          setState('authenticated');
+          return;
+        }
         await supabase.auth.signOut();
         queryClient.clear();
         setSession(null);
@@ -76,6 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      setRole('admin');
+      setStaffId(null);
       setSession(sess);
       setState('authenticated');
     },
@@ -158,13 +179,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       state,
+      role,
+      staffId,
       user: session?.user ?? null,
       session,
       signInWithPassword,
       signOut,
       resetIdleTimer,
     }),
-    [state, session, signInWithPassword, signOut, resetIdleTimer],
+    [state, role, staffId, session, signInWithPassword, signOut, resetIdleTimer],
   );
 
   return (

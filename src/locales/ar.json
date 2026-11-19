@@ -63,7 +63,9 @@
     "groupSystem": "النظام",
     "routineShort": "روتين",
     "groupQuick": "اختصارات",
-    "extras": "الباقات والمميزات"
+    "extras": "الباقات والمميزات",
+    "backup": "نسخة احتياطية",
+    "audit": "سجل العمليات"
   },
   "status": {
     "pending_payment": "في انتظار الدفع",
