@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Calendar,
   ClipboardCheck,
-  Users,
+  UserPlus,
   Wallet,
   MoreHorizontal,
   Globe,
@@ -27,7 +27,7 @@ import { useGlobalShortcuts } from '@/hooks/useKeyboardShortcuts';
 const mainTabs = [
   { to: '/', icon: Calendar, labelKey: 'nav.today' },
   { to: '/routine', icon: ClipboardCheck, labelKey: 'nav.routineShort', badge: 'routine' as const },
-  { to: '/more/customers', icon: Users, labelKey: 'nav.customers' },
+  { to: '/more/walk-in', icon: UserPlus, labelKey: 'nav.walkIn' },
   { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
   { to: '/more', icon: MoreHorizontal, labelKey: 'nav.more' },
 ];
@@ -171,7 +171,7 @@ export function AppShell() {
               tab.to === '/'
                 ? p === '/'
                 : tab.to === '/more'
-                  ? p.startsWith('/more') && !p.startsWith('/more/finance')
+                  ? p.startsWith('/more') && !p.startsWith('/more/finance') && !p.startsWith('/more/walk-in')
                   : p.startsWith(tab.to);
             return (
               <NavLink

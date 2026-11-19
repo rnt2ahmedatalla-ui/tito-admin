@@ -16,11 +16,11 @@
     "language": "English",
     "signOut": "تسجيل الخروج",
     "signIn": "تسجيل الدخول",
-    "email": "الإيميل",
+    "email": "اسم المستخدم أو الإيميل",
     "password": "كلمة المرور",
     "loginRequired": "اكتب الإيميل وكلمة المرور",
     "loginFailed": "الإيميل أو كلمة المرور غلط",
-    "loginSubtitle": "ادخل بالإيميل وكلمة المرور",
+    "loginSubtitle": "ادخل باسم المستخدم (أو الإيميل) وكلمة المرور",
     "adminWelcome": "لوحة تحكم tito",
     "adminSecure": "حساب واحد لصاحب المحل فقط — مش Google",
     "accessDenied": "غير مصرح لك بالدخول",
@@ -65,7 +65,8 @@
     "groupQuick": "اختصارات",
     "extras": "الباقات والمميزات",
     "backup": "نسخة احتياطية",
-    "audit": "سجل العمليات"
+    "audit": "سجل العمليات",
+    "cleanup": "تنظيف البيانات"
   },
   "status": {
     "pending_payment": "في انتظار الدفع",

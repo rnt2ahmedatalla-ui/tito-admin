@@ -17,16 +17,19 @@ import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
 import { CustomerFile } from './CustomerFile';
+import { rpcUntyped } from '@/features/staff/staffLogin';
 
 const PAGE_SIZE = 25;
 
 function CustomerCard({
   customer,
   onBlock,
+  onDelete,
   onOpen,
 }: {
   customer: CustomerSearchResult;
   onBlock: () => void;
+  onDelete: () => void;
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
@@ -63,17 +66,29 @@ function CustomerCard({
             </span>
           ) : null}
         </div>
-        <Button
-          variant={customer.is_blocked ? 'secondary' : 'danger'}
-          size="sm"
-          className="shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onBlock();
-          }}
-        >
-          {customer.is_blocked ? t('customers.unblock') : t('customers.block')}
-        </Button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          <Button
+            variant={customer.is_blocked ? 'secondary' : 'danger'}
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onBlock();
+            }}
+          >
+            {customer.is_blocked ? t('customers.unblock') : t('customers.block')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-danger"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            {t('app.delete', { defaultValue: 'مسح' })}
+          </Button>
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
@@ -105,10 +120,12 @@ function CustomerDetailPanel({
   customer,
   onClose,
   onBlock,
+  onDelete,
 }: {
   customer: CustomerSearchResult;
   onClose: () => void;
   onBlock: () => void;
+  onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
@@ -272,9 +289,12 @@ function CustomerDetailPanel({
           </Button>
         </div>
 
-        <div className="border-t border-bark/10 pt-3">
+        <div className="flex flex-wrap gap-2 border-t border-bark/10 pt-3">
           <Button variant={customer.is_blocked ? 'secondary' : 'danger'} size="sm" onClick={onBlock}>
             {customer.is_blocked ? t('customers.unblock') : t('customers.block')}
+          </Button>
+          <Button variant="ghost" size="sm" className="text-danger" onClick={onDelete}>
+            {isAr ? 'مسح العميل' : 'Delete customer'}
           </Button>
         </div>
       </div>
@@ -290,6 +310,8 @@ export function CustomersPage() {
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [blockTarget, setBlockTarget] = useState<CustomerSearchResult | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerSearchResult | null>(null);
+  const [deleteWithBookings, setDeleteWithBookings] = useState<number | null>(null);
   const [openCustomer, setOpenCustomer] = useState<CustomerSearchResult | null>(null);
   const autoOpenedRef = useRef(false);
 
@@ -351,6 +373,31 @@ export function CustomersPage() {
     onError: (e) => toast.error(mapError(e, t)),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async ({ id, withBookings }: { id: string; withBookings: boolean }) => {
+      const { error: dErr } = await rpcUntyped('admin_delete_customer', { p_user: id, p_with_bookings: withBookings });
+      if (dErr) throw new Error(dErr.message);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setDeleteTarget(null);
+      setDeleteWithBookings(null);
+      setOpenCustomer(null);
+      toast.success(t('app.confirm'));
+    },
+    onError: (e) => {
+      const m = (e as Error).message;
+      const hit = /HAS_BOOKINGS:(\d+)/.exec(m);
+      if (hit) {
+        setDeleteWithBookings(Number(hit[1]));
+        return;
+      }
+      setDeleteTarget(null);
+      setDeleteWithBookings(null);
+      toast.error(/IS_ADMIN|IS_STAFF/.test(m) ? 'ده حساب أدمن أو حلاق، مينفعش يتمسح من هنا' : mapError(e, t));
+    },
+  });
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">{t('customers.title')}</h1>
@@ -383,6 +430,7 @@ export function CustomersPage() {
                 key={c.id}
                 customer={c}
                 onBlock={() => setBlockTarget(c)}
+                onDelete={() => setDeleteTarget(c)}
                 onOpen={() => setOpenCustomer(c)}
               />
             ))}
@@ -432,6 +480,17 @@ export function CustomersPage() {
                       >
                         {c.is_blocked ? t('customers.unblock') : t('customers.block')}
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ms-1 text-danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(c);
+                        }}
+                      >
+                        {t('app.delete', { defaultValue: 'مسح' })}
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -459,8 +518,34 @@ export function CustomersPage() {
             setBlockTarget(openCustomer);
             setOpenCustomer(null);
           }}
+          onDelete={() => {
+            setDeleteTarget(openCustomer);
+            setOpenCustomer(null);
+          }}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={!!deleteTarget && deleteWithBookings === null}
+        title="مسح العميل"
+        message={`هتمسح "${deleteTarget?.full_name ?? ''}" من قايمة العملاء نهائياً. لو عنده حجوزات هسألك قبل ما أمسحها.`}
+        confirmLabel="مسح"
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate({ id: deleteTarget.id, withBookings: false })}
+        onCancel={() => setDeleteTarget(null)}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget && deleteWithBookings !== null}
+        title="العميل ده عنده حجوزات"
+        message={`عنده ${deleteWithBookings ?? 0} حجز. لو كملت هتتمسح كل حجوزاته ودفعاته معاه، وده هيأثر على الإيراد والتقارير بتاعة الفترة دي. متأكد؟`}
+        confirmLabel="امسحه مع حجوزاته"
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate({ id: deleteTarget.id, withBookings: true })}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteWithBookings(null);
+        }}
+      />
 
       <ConfirmDialog
         open={!!blockTarget}

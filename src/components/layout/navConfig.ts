@@ -19,6 +19,7 @@ import {
   Wrench,
   DatabaseBackup,
   History,
+  Eraser,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -74,6 +75,7 @@ export const navGroups: NavGroup[] = [
       { to: '/more/backup', icon: DatabaseBackup, labelKey: 'nav.backup' },
       { to: '/more/audit', icon: History, labelKey: 'nav.audit' },
       { to: '/more/maintenance', icon: Wrench, labelKey: 'nav.maintenance' },
+      { to: '/more/cleanup', icon: Eraser, labelKey: 'nav.cleanup' },
     ],
   },
 ];
