@@ -27,6 +27,16 @@ export type Tx = {
 };
 export type AllocItem = { id: string; name: string; pct: number; kind: 'savings' | 'development' | 'owner' | 'other'; wallet_id?: string | null };
 export type FinSettings = { tracking_start: string; cash_wallet_id: string | null; online_wallet_id: string | null; alloc: AllocItem[] };
+export type Asset = {
+  id: string;
+  name: string;
+  purchase_date: string | null;
+  cost: number;
+  service_every_days: number | null;
+  next_service_date: string | null;
+  note: string | null;
+  is_active: boolean;
+};
 export type StockItem = { id: string; name: string; unit: string; min_qty: number; last_cost: number; is_active: boolean; qty: number };
 export type Closing = {
   id: string;
@@ -110,6 +120,13 @@ export function useFinData() {
         untypedDb.from('fin_items').select('*').order('name'),
         untypedDb.from('fin_item_moves').select('item_id, delta'),
       ]);
+      const aq = await untypedDb.from('fin_assets').select('*').order('created_at');
+      const assetsReady = !aq.error;
+      const assets = ((aq.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        id: String(r.id), name: String(r.name), purchase_date: (r.purchase_date as string | null) ?? null, cost: num(r.cost),
+        service_every_days: r.service_every_days == null ? null : num(r.service_every_days),
+        next_service_date: (r.next_service_date as string | null) ?? null, note: (r.note as string | null) ?? null, is_active: !!r.is_active,
+      })) as Asset[];
       const extraReady = !bq.error && !iq.error && !mq.error;
       const budgets = new Map<string, number>(
         ((bq.data ?? []) as Array<Record<string, unknown>>).map((r): [string, number] => [String(r.category_id), num(r.amount)]),
@@ -162,7 +179,7 @@ export function useFinData() {
         counted_cash: num(r.counted_cash), diff: num(r.diff), note: (r.note as string | null) ?? null,
       })) as Closing[];
       const income = settings ? await fetchIncome(settings.tracking_start, todayCairo()) : null;
-      return { wallets, categories, txs, settings, closings, income, recurring, recurringReady, budgets, items, extraReady };
+      return { wallets, categories, txs, settings, closings, income, recurring, recurringReady, budgets, items, extraReady, assets, assetsReady };
     },
   });
 }
