@@ -25,7 +25,9 @@ export type Tx = {
   category_id: string | null;
   note: string | null;
 };
-export type FinSettings = { tracking_start: string; cash_wallet_id: string | null; online_wallet_id: string | null };
+export type AllocItem = { id: string; name: string; pct: number; kind: 'savings' | 'development' | 'owner' | 'other'; wallet_id?: string | null };
+export type FinSettings = { tracking_start: string; cash_wallet_id: string | null; online_wallet_id: string | null; alloc: AllocItem[] };
+export type StockItem = { id: string; name: string; unit: string; min_qty: number; last_cost: number; is_active: boolean; qty: number };
 export type Closing = {
   id: string;
   close_date: string;
@@ -103,6 +105,23 @@ export function useFinData() {
         untypedDb.from('fin_closings').select('*').order('close_date', { ascending: false }).limit(60),
         untypedDb.from('fin_recurring').select('*').order('created_at'),
       ]);
+      const [bq, iq, mq] = await Promise.all([
+        untypedDb.from('fin_budgets').select('*'),
+        untypedDb.from('fin_items').select('*').order('name'),
+        untypedDb.from('fin_item_moves').select('item_id, delta'),
+      ]);
+      const extraReady = !bq.error && !iq.error && !mq.error;
+      const budgets = new Map<string, number>(
+        ((bq.data ?? []) as Array<Record<string, unknown>>).map((r): [string, number] => [String(r.category_id), num(r.amount)]),
+      );
+      const qtyBy = new Map<string, number>();
+      for (const m of (mq.data ?? []) as Array<Record<string, unknown>>) {
+        qtyBy.set(String(m.item_id), (qtyBy.get(String(m.item_id)) ?? 0) + num(m.delta));
+      }
+      const items = ((iq.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        id: String(r.id), name: String(r.name), unit: String(r.unit ?? ''), min_qty: num(r.min_qty),
+        last_cost: num(r.last_cost), is_active: !!r.is_active, qty: qtyBy.get(String(r.id)) ?? 0,
+      })) as StockItem[];
       for (const r of [w, c, t, s, cl]) if (r.error) throw r.error;
       const recurringReady = !rc.error;
       const recurring = ((rc.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -126,14 +145,24 @@ export function useFinData() {
       })) as Tx[];
       const sr = s.data as Record<string, unknown> | null;
       const settings: FinSettings | null = sr
-        ? { tracking_start: String(sr.tracking_start), cash_wallet_id: (sr.cash_wallet_id as string | null) ?? null, online_wallet_id: (sr.online_wallet_id as string | null) ?? null }
+        ? {
+            tracking_start: String(sr.tracking_start),
+            cash_wallet_id: (sr.cash_wallet_id as string | null) ?? null,
+            online_wallet_id: (sr.online_wallet_id as string | null) ?? null,
+            alloc: Array.isArray(sr.alloc)
+              ? (sr.alloc as Array<Record<string, unknown>>).map((a) => ({
+                  id: String(a.id), name: String(a.name), pct: num(a.pct),
+                  kind: (a.kind as AllocItem['kind']) ?? 'other', wallet_id: (a.wallet_id as string | null) ?? null,
+                }))
+              : [],
+          }
         : null;
       const closings = ((cl.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
         id: String(r.id), close_date: String(r.close_date), expected_cash: num(r.expected_cash),
         counted_cash: num(r.counted_cash), diff: num(r.diff), note: (r.note as string | null) ?? null,
       })) as Closing[];
       const income = settings ? await fetchIncome(settings.tracking_start, todayCairo()) : null;
-      return { wallets, categories, txs, settings, closings, income, recurring, recurringReady };
+      return { wallets, categories, txs, settings, closings, income, recurring, recurringReady, budgets, items, extraReady };
     },
   });
 }
