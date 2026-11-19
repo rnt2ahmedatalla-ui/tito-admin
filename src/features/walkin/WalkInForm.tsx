@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { X } from 'lucide-react';
+import { Check, MessageCircle, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Service } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { formatCairoTime, fromCairoLocal } from '@/lib/time';
+import { formatCairoDate, formatCairoTime, fromCairoLocal } from '@/lib/time';
+import { buildWhatsAppUrl } from '@/lib/whatsapp';
+import { formatEGP } from '@/lib/money';
 import { mapError } from '@/lib/errors';
 
 const phoneSchema = z.string().regex(/^01[0125][0-9]{8}$/);
@@ -61,6 +63,8 @@ export function WalkInForm({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  // بعد الحجز: رسالة جاهزة تتعدّل وتتبعت للعميل
+  const [done, setDone] = useState<{ phone: string; message: string } | null>(null);
 
   // بيانات الوقت المقفول
   const [eventTitle, setEventTitle] = useState('');
@@ -219,11 +223,26 @@ export function WalkInForm({
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(mode === 'event' ? (isAr ? 'تم حفظ الوقت المقفول' : 'Blocked time saved') : t('walkIn.create'));
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
       void queryClient.invalidateQueries({ queryKey: ['time-off'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      if (mode === 'booking') {
+        // نبني الرسالة من بيانات الحجز اللي لسه قدامنا قبل ما الفورم يتفضى
+        const svc = services.find((x) => x.id === serviceId);
+        const startAt = time || slots[0] || '';
+        const { data: st } = await supabase.from('settings').select('shop_name').eq('id', 1).maybeSingle();
+        const shop = (st as { shop_name?: string | null } | null)?.shop_name || 'tito';
+        const svcName = svc ? (isAr ? svc.name_ar : svc.name_en) : '';
+        const when = startAt ? `${formatCairoDate(startAt, locale)} · ${formatCairoTime(startAt, locale)}` : '';
+        const price = svc ? formatEGP(Number(svc.price_egp)) : '';
+        const message = isAr
+          ? `أهلاً ${name.trim()} 👋\nحجزنا لك في ${shop}:\n• الخدمة: ${svcName}\n• الموعد: ${when}\n• السعر: ${price}\n${paidCash ? '• الدفع: اتدفع كاش ✅' : '• الدفع: في المحل لما تيجي'}\nمستنيينك 💈`
+          : `Hi ${name.trim()} 👋\nYour booking at ${shop}:\n• Service: ${svcName}\n• When: ${when}\n• Price: ${price}\n${paidCash ? '• Payment: paid in cash ✅' : '• Payment: at the shop'}\nSee you soon 💈`;
+        setDone({ phone: phone.trim(), message });
+        return;
+      }
       resetAll();
       onSuccess?.();
     },
@@ -238,6 +257,53 @@ export function WalkInForm({
 
   const bookingDisabled = !name || !phone || !serviceId || (!time && slots.length === 0) || conflict;
   const eventDisabled = !date || !eventTitle.trim() || !eventStart || !eventEnd;
+
+  if (done) {
+    const waUrl = buildWhatsAppUrl(done.phone, done.message);
+    const finish = () => {
+      setDone(null);
+      resetAll();
+      onSuccess?.();
+    };
+    return (
+      <div className="space-y-3.5">
+        <div className="flex items-center gap-2 rounded-btn bg-success/10 p-3 text-success">
+          <Check className="size-5 shrink-0" aria-hidden />
+          <p className="text-sm font-semibold">{isAr ? 'الحجز اتسجل' : 'Booking saved'}</p>
+        </div>
+        <div>
+          <label htmlFor="walkin-msg" className="text-sm font-medium text-ink-70">
+            {isAr ? 'رسالة للعميل (عدّل فيها براحتك)' : 'Message for the customer (edit freely)'}
+          </label>
+          <textarea
+            id="walkin-msg"
+            rows={8}
+            value={done.message}
+            onChange={(e) => setDone({ ...done, message: e.target.value })}
+            className="mt-1 w-full rounded-btn border border-bark/20 bg-white p-3 text-sm leading-relaxed text-espresso"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" className="w-full" onClick={finish}>
+            {isAr ? 'تم، من غير رسالة' : 'Done, no message'}
+          </Button>
+          {waUrl ? (
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={() => {
+                window.open(waUrl, '_blank', 'noopener,noreferrer');
+                finish();
+              }}
+            >
+              <MessageCircle className="size-4" aria-hidden />
+              {isAr ? 'ابعت واتساب' : 'Send WhatsApp'}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3.5">
