@@ -62,7 +62,8 @@
     "groupShop": "Shop setup",
     "groupSystem": "System",
     "routineShort": "Routine",
-    "groupQuick": "Shortcuts"
+    "groupQuick": "Shortcuts",
+    "extras": "Packages & features"
   },
   "status": {
     "pending_payment": "Pending payment",

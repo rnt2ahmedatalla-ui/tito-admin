@@ -62,7 +62,8 @@
     "groupShop": "إدارة المحل",
     "groupSystem": "النظام",
     "routineShort": "روتين",
-    "groupQuick": "اختصارات"
+    "groupQuick": "اختصارات",
+    "extras": "الباقات والمميزات"
   },
   "status": {
     "pending_payment": "في انتظار الدفع",

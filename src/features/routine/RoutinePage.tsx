@@ -1,17 +1,18 @@
 import { lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, CreditCard, MessageCircle, Users } from 'lucide-react';
+import { Bell, CreditCard, MessageCircle, Users, Hourglass } from 'lucide-react';
+import { useFeatureFlags } from '@/features/extras/useFeatures';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
 import { useUnreadBookingCount } from '@/hooks/useBookingLog';
 import { cn } from '@/lib/cn';
 
 const PaymentsPage = lazy(() => import('@/features/payments/PaymentsPage').then((m) => ({ default: m.PaymentsPage })));
+const WaitlistTab = lazy(() => import('@/features/extras/WaitlistTab').then((m) => ({ default: m.WaitlistTab })));
 const RemindersPage = lazy(() => import('@/features/reminders/RemindersPage').then((m) => ({ default: m.RemindersPage })));
 
-type Key = 'payments' | 'new' | 'reminders' | 'inactive';
-const KEYS: Key[] = ['payments', 'new', 'reminders', 'inactive'];
+type Key = 'payments' | 'new' | 'reminders' | 'inactive' | 'waitlist';
 
 /** الروتين اليومي: كل اللي بتعمله كل يوم في مكان واحد، بدل ما يبقى متفرق */
 export function RoutinePage() {
@@ -22,14 +23,16 @@ export function RoutinePage() {
   const payCount = usePaymentsCount().data ?? 0;
   const newCount = useUnreadBookingCount().data ?? 0;
 
+  const waitlistOn = !!useFeatureFlags().data?.waitlist;
   const asked = params.get('t') as Key | null;
-  const active: Key = asked && KEYS.includes(asked) ? asked : payCount > 0 ? 'payments' : newCount > 0 ? 'new' : 'reminders';
+  const active: Key = asked && (asked !== 'waitlist' || waitlistOn) && ['payments', 'new', 'reminders', 'inactive', 'waitlist'].includes(asked) ? asked : payCount > 0 ? 'payments' : newCount > 0 ? 'new' : 'reminders';
 
   const tabs: Array<{ key: Key; label: string; icon: typeof Bell; badge: number }> = [
     { key: 'payments', label: L('الدفعات', 'Payments'), icon: CreditCard, badge: payCount },
     { key: 'new', label: L('الجديدة', 'New'), icon: Bell, badge: newCount },
     { key: 'reminders', label: L('التذكيرات', 'Reminders'), icon: MessageCircle, badge: 0 },
     { key: 'inactive', label: L('الغايبين', 'Inactive'), icon: Users, badge: 0 },
+    ...(waitlistOn ? [{ key: 'waitlist' as Key, label: L('الانتظار', 'Waitlist'), icon: Hourglass, badge: 0 }] : []),
   ];
 
   return (
@@ -41,7 +44,7 @@ export function RoutinePage() {
         </p>
       </div>
 
-      <div role="tablist" className="grid grid-cols-4 gap-1.5 rounded-card border border-default bg-white p-1.5">
+      <div role="tablist" className={cn('grid gap-1.5 rounded-card border border-default bg-white p-1.5', tabs.length > 4 ? 'grid-cols-5' : 'grid-cols-4')}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const on = active === tab.key;
@@ -77,6 +80,8 @@ export function RoutinePage() {
       <Suspense fallback={<Skeleton className="h-48" />}>
         {active === 'payments' ? (
           <PaymentsPage embedded />
+        ) : active === 'waitlist' ? (
+          <WaitlistTab />
         ) : (
           <RemindersPage section={active} hideTabs />
         )}
