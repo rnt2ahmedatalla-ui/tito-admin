@@ -12,6 +12,8 @@ import { formatEGP as baseEGP } from '@/lib/money';
 // علامة اتجاه علشان الرقم السالب يظهر صح في العربي (-610 مش 610-)
 const formatEGP = (n: number) => `\u200E${baseEGP(n)}`;
 import { cn } from '@/lib/cn';
+import { FinanceTab as IncomeTab } from '@/features/payments/FinanceTab';
+import { TransfersTab } from '@/features/payments/TransfersTab';
 import {
   BUCKET_LABEL,
   KIND_LABEL,
@@ -31,7 +33,7 @@ import {
   type WalletKind,
 } from './useFinance';
 
-type TabId = 'overview' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'assets' | 'reports' | 'wallets' | 'closing' | 'categories';
+type TabId = 'overview' | 'income' | 'transfers' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'assets' | 'reports' | 'wallets' | 'closing' | 'categories';
 
 const selectCls = 'min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm text-espresso';
 
@@ -72,6 +74,8 @@ export function FinancePage() {
 
   const tabs: Array<{ id: TabId; label: string }> = [
     { id: 'overview', label: L('نظرة عامة', 'Overview') },
+    { id: 'income', label: L('الدخل والصناديق', 'Income & boxes') },
+    { id: 'transfers', label: L('سجل الحوالات', 'Transfers log') },
     { id: 'expenses', label: L('المصروفات', 'Expenses') },
     { id: 'recurring', label: L('الثابتة', 'Recurring') },
     { id: 'budget', label: L('الميزانية', 'Budget') },
@@ -113,7 +117,11 @@ export function FinancePage() {
           </button>
         ))}
       </div>
-      {!d ? (
+      {tab === 'income' ? (
+        <IncomeTab />
+      ) : tab === 'transfers' ? (
+        <TransfersTab />
+      ) : !d ? (
         <Skeleton className="h-40" />
       ) : tab === 'overview' ? (
         <Overview d={d} />

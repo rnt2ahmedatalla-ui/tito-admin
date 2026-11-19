@@ -55,7 +55,14 @@
     "settings": "Settings",
     "customers": "Customers",
     "walkIn": "Walk-in",
-    "maintenance": "Maintenance"
+    "maintenance": "Maintenance",
+    "routine": "Daily routine",
+    "groupMoney": "Money",
+    "groupCustomers": "Customers",
+    "groupShop": "Shop setup",
+    "groupSystem": "System",
+    "routineShort": "Routine",
+    "groupQuick": "Shortcuts"
   },
   "status": {
     "pending_payment": "Pending payment",
