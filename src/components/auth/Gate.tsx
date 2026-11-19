@@ -115,9 +115,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 <Mail className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-ink-70" />
                 <input
                   id="admin-email"
-                  type="email"
+                  type="text"
                   autoComplete="username"
-                  inputMode="email"
+                  autoCapitalize="none"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   dir="ltr"

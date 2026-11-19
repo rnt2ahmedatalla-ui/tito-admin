@@ -170,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
+      email: (email.includes('@') ? email : `${email}@barbers.tito.app`).trim().toLowerCase(),
       password,
     });
     if (error) throw error;
