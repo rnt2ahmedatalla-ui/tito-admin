@@ -14,6 +14,7 @@ import { CAIRO_TZ, formatCairoDate, formatCairoTime, fromCairoLocal } from '@/li
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { formatEGP } from '@/lib/money';
 import { mapError } from '@/lib/errors';
+import { useStaff } from '@/features/staff/StaffPage';
 
 const phoneSchema = z.string().regex(/^01[0125][0-9]{8}$/);
 
@@ -34,6 +35,7 @@ type Customer = { id: string; full_name?: string | null; name?: string | null; p
 export interface WalkInFormProps {
   initialDate?: string;
   initialTime?: string;
+  initialStaffId?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -41,6 +43,7 @@ export interface WalkInFormProps {
 export function WalkInForm({
   initialDate = '',
   initialTime = '',
+  initialStaffId = '',
   onSuccess,
   onCancel,
 }: WalkInFormProps) {
@@ -59,6 +62,8 @@ export function WalkInForm({
   const [phone, setPhone] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [extraIds, setExtraIds] = useState<string[]>([]);
+  const [staffId, setStaffId] = useState(initialStaffId);
+  const activeStaff = (useStaff().data ?? []).filter((m) => m.is_active);
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
   const [paidCash, setPaidCash] = useState(true);
@@ -229,7 +234,7 @@ export function WalkInForm({
         p_start_at: startAt,
         p_paid_cash: paidCash,
       };
-      const ex = await rpcUntyped('admin_create_booking_ex', { ...base, p_extra_ids: extraIds, p_force: force });
+      const ex = await rpcUntyped('admin_create_booking_ex', { ...base, p_extra_ids: extraIds, p_force: force, ...(staffId ? { p_staff_id: staffId } : {}) });
       if (!ex.error) return;
       const missing = /admin_create_booking_ex|PGRST202|Could not find the function/i.test(ex.error.message);
       if (!missing) throw ex.error;
@@ -460,6 +465,23 @@ export function WalkInForm({
             </select>
           </div>
 
+          {activeStaff.length >= 2 ? (
+            <div>
+              <label className="text-sm font-medium text-ink-70" htmlFor="walkin-staff">{isAr ? 'الحلاق' : 'Barber'}</label>
+              <select
+                id="walkin-staff"
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+                className="mt-1 min-h-11 w-full rounded-btn border border-default bg-white px-3 text-sm"
+              >
+                <option value="">{isAr ? 'من غير تحديد' : 'Unassigned'}</option>
+                {activeStaff.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
           {extras.length > 0 ? (
             <div>
               <p className="text-sm font-medium text-ink-70">{isAr ? 'إضافات (اختياري)' : 'Add-ons (optional)'}</p>
@@ -683,11 +705,13 @@ export function WalkInModal({
   onClose,
   initialDate,
   initialTime,
+  initialStaffId,
 }: {
   open: boolean;
   onClose: () => void;
   initialDate?: string;
   initialTime?: string;
+  initialStaffId?: string;
 }) {
   const { t } = useTranslation();
 
@@ -712,6 +736,7 @@ export function WalkInModal({
           <WalkInForm
             initialDate={initialDate}
             initialTime={initialTime}
+            initialStaffId={initialStaffId}
             onSuccess={onClose}
             onCancel={onClose}
           />

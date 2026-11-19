@@ -31,6 +31,7 @@ const mainTabs = [
 
 const sidebarLinks = [
   ...mainTabs.slice(0, 4),
+  { to: '/more/staff', labelKey: 'nav.staff' },
   { to: '/more/services', labelKey: 'nav.services' },
   { to: '/more/hours', labelKey: 'nav.hours' },
   { to: '/more/time-off', labelKey: 'nav.timeOff' },

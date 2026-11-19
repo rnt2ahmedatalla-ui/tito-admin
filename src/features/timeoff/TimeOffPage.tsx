@@ -15,6 +15,7 @@ import { formatCairoDateShort, formatCairoTime, fromCairoLocal, toCairo } from '
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { mapError } from '@/lib/errors';
 import { first } from '@/lib/booking';
+import { useStaff } from '@/features/staff/StaffPage';
 
 function cairoBoundsForYmd(ymd: string): { start: string; end: string } {
   const parts = ymd.split('-').map(Number);
@@ -41,7 +42,10 @@ export function TimeOffPage() {
     start_at: '',
     end_at: '',
     reason: '',
+    staff_id: '',
   });
+  const staffList = (useStaff().data ?? []).filter((m) => m.is_active);
+  const staffName = (id?: string | null) => staffList.find((m) => m.id === id)?.name ?? null;
   const [overlapBookings, setOverlapBookings] = useState<BookingWithRelations[]>([]);
   const [acknowledged, setAcknowledged] = useState(false);
 
@@ -91,12 +95,15 @@ export function TimeOffPage() {
 
   const checkOverlap = async () => {
     const range = resolveRange();
-    const { data, error } = await supabase
+    let q = supabase
       .from('bookings')
       .select('*, profile:profiles!bookings_user_id_fkey(full_name, phone)')
       .in('status', ['confirmed', 'pending_payment'])
       .gte('start_at', range.start_at)
       .lte('start_at', range.end_at);
+    // إجازة لحلاق معين تأثر بس على حجوزاته (والحجوزات اللي من غير حلاق)
+    if (form.staff_id) q = q.or(`staff_id.eq.${form.staff_id},staff_id.is.null`);
+    const { data, error } = await q;
     if (error) throw error;
     setOverlapBookings((data ?? []) as BookingWithRelations[]);
     return (data ?? []).length;
@@ -112,6 +119,7 @@ export function TimeOffPage() {
         end_at: range.end_at,
         reason: form.reason,
         all_day: range.all_day,
+        staff_id: form.staff_id || null,
       };
       const { error } = editingId
         ? await supabase.from('time_off').update(payload).eq('id', editingId)
@@ -123,7 +131,7 @@ export function TimeOffPage() {
       void queryClient.invalidateQueries({ queryKey: ['bookings', 'today'] });
       setShowForm(false);
       setEditingId(null);
-      setForm({ all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '' });
+      setForm({ all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '', staff_id: '' });
       setOverlapBookings([]);
       setAcknowledged(false);
       toast.success(t('app.save'));
@@ -151,7 +159,7 @@ export function TimeOffPage() {
     onError: (e) => toast.error(mapError(e, t)),
   });
 
-  const emptyForm = { all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '' };
+  const emptyForm = { all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '', staff_id: '' };
 
   const startAdd = () => {
     setEditingId(null);
@@ -172,6 +180,7 @@ export function TimeOffPage() {
       start_at: format(s, "yyyy-MM-dd'T'HH:mm"),
       end_at: format(e, "yyyy-MM-dd'T'HH:mm"),
       reason: row.reason ?? '',
+      staff_id: (row as unknown as { staff_id?: string | null }).staff_id ?? '',
     });
     setOverlapBookings([]);
     setAcknowledged(false);
@@ -207,6 +216,22 @@ export function TimeOffPage() {
       {showForm ? (
         <Card>
           <CardBody className="space-y-3">
+            {staffList.length > 0 ? (
+              <div>
+                <label htmlFor="off-staff" className="text-sm font-medium text-ink-70">{isAr ? 'الإجازة دي لمين؟' : 'Who is this time off for?'}</label>
+                <select
+                  id="off-staff"
+                  value={form.staff_id}
+                  onChange={(e) => setForm({ ...form, staff_id: e.target.value })}
+                  className="mt-1 min-h-11 w-full rounded-btn border border-default bg-white px-3 text-sm"
+                >
+                  <option value="">{isAr ? 'المحل كله (كل الحلاقين)' : 'Whole shop (all barbers)'}</option>
+                  {staffList.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <label className="flex items-center gap-2 text-sm font-medium text-espresso">
               <input
                 type="checkbox"
@@ -308,6 +333,11 @@ export function TimeOffPage() {
                 <div>
                   <p className="font-medium">
                     {to.reason}
+                    {(to as unknown as { staff_id?: string | null }).staff_id ? (
+                      <span className="ms-2 rounded-full bg-gold/20 px-2 py-0.5 text-xs font-medium text-espresso">
+                        {staffName((to as unknown as { staff_id?: string | null }).staff_id) ?? (isAr ? 'حلاق' : 'Barber')}
+                      </span>
+                    ) : null}
                     {to.all_day ? (
                       <span className="ms-2 text-xs font-normal text-gold">{t('timeOff.allDay')}</span>
                     ) : null}
