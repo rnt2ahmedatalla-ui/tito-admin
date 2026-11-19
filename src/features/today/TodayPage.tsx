@@ -877,7 +877,7 @@ export function TodayPage() {
                                   ) : isShopBooking(b) ? (
                                     <Store className="size-3.5 shrink-0 opacity-70" aria-label={locale === 'ar' ? 'في المحل' : 'In shop'} />
                                   ) : null}
-                                  {b.status === 'pending' ? (
+                                  {b.status === 'pending_payment' ? (
                                     <span className="size-2 shrink-0 rounded-full bg-amber-500" aria-label={locale === 'ar' ? 'مستني' : 'Pending'} />
                                   ) : null}
                                 </div>
