@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, CalendarDays, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Plus, Globe, Store } from 'lucide-react';
 import { addDays, getDaysInMonth, startOfMonth, getDay, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import type { BookingWithRelations, TimeOff, WorkingHours } from '@/types/database';
@@ -119,6 +119,7 @@ export function TodayPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingWithRelations | null>(null);
   const nowLineRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const [hourH, setHourH] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem(ZOOM_KEY));
@@ -134,27 +135,46 @@ export function TodayPage() {
       /* ignore */
     }
   }, [hourH]);
-  // تكبير/تصغير بإصبعين جوه التقويم بس (من غير ما الصفحة كلها تكبر)
+  // تكبير/تصغير بإصبعين جوه التقويم بس. أثناء الحركة بنعمل تكبير بصري خفيف (من غير إعادة رسم)،
+  // ولما ترفع صباعك بيتثبت المقاس الجديد.
   useEffect(() => {
     const el = scrollAreaRef.current;
-    if (!el) return undefined;
+    const inner = innerRef.current;
+    if (!el || !inner) return undefined;
     let startDist = 0;
-    let startH = 0;
+    let ratio = 1;
+    let focusY = 0;
     const dist = (t: TouchList) => Math.hypot((t[0]?.clientX ?? 0) - (t[1]?.clientX ?? 0), (t[0]?.clientY ?? 0) - (t[1]?.clientY ?? 0));
     const onStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         startDist = dist(e.touches);
-        startH = hourHRef.current;
+        ratio = 1;
+        const r = el.getBoundingClientRect();
+        focusY = ((e.touches[0]?.clientY ?? 0) + (e.touches[1]?.clientY ?? 0)) / 2 - r.top;
+        inner.style.transformOrigin = `0 ${el.scrollTop + focusY}px`;
+        inner.style.willChange = 'transform';
       }
     };
     const onMove = (e: TouchEvent) => {
       if (e.touches.length === 2 && startDist > 0) {
         e.preventDefault();
-        setHourH(clampH((startH * dist(e.touches)) / startDist));
+        const target = clampH(hourHRef.current * (dist(e.touches) / startDist));
+        ratio = target / hourHRef.current;
+        inner.style.transform = `scaleY(${ratio})`;
       }
     };
     const onEnd = () => {
+      if (startDist === 0) return;
       startDist = 0;
+      inner.style.transform = '';
+      inner.style.willChange = '';
+      const next = clampH(hourHRef.current * ratio);
+      const real = next / hourHRef.current;
+      const keepY = el.scrollTop + focusY;
+      setHourH(next);
+      requestAnimationFrame(() => {
+        el.scrollTop = keepY * real - focusY;
+      });
     };
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: false });
@@ -600,7 +620,7 @@ export function TodayPage() {
             style={{ touchAction: 'pan-x pan-y' }}
             className="max-h-[calc(100dvh-17rem)] lg:max-h-[calc(100dvh-9rem)] min-h-[460px] overflow-x-auto overflow-y-auto"
           >
-            <div className="flex w-full min-w-0 lg:min-w-[340px]">
+            <div ref={innerRef} className="flex w-full min-w-0 lg:min-w-[340px]">
               {/* Left sticky time axis column */}
               <div className="sticky start-0 z-20 w-14 shrink-0 bg-white border-e border-bark/15 sm:w-16">
                 {/* Blank corner cell */}
@@ -823,7 +843,7 @@ export function TodayPage() {
                           const bLocal = toCairo(b.start_at);
                           const bStartMin = bLocal.getHours() * 60 + bLocal.getMinutes();
                           const topPx = Math.max(0, ((bStartMin - gridStartMinutes) / 60) * hourH);
-                          const heightPx = Math.max(38, (b.duration_minutes / 60) * hourH - 3);
+                          const heightPx = Math.max(46, (b.duration_minutes / 60) * hourH - 3);
                           const style = getStatusStyle(b.status);
                           const customerName = first(b.profile)?.full_name ?? '—';
                           const serviceName = locale === 'ar' ? b.service_name_ar : b.service_name_en;
@@ -849,37 +869,26 @@ export function TodayPage() {
                               {/* Colored Status Stripe on edge */}
                               <div className={cn('w-1 shrink-0', style.stripe)} />
 
-                              <div className="flex flex-1 flex-col justify-between overflow-hidden p-1 sm:p-1.5">
-                                <div className="min-w-0">
-                                    <div className="flex items-center justify-between gap-1">
-                                      <p className="truncate text-xs font-bold leading-tight">
-                                        {customerName}
-                                      </p>
-                                      <div className="flex shrink-0 items-center gap-1">
-                                        {b.status === 'confirmed' ? (
-                                          <span className="shrink-0 rounded bg-emerald-600/15 px-1 py-0.5 text-[9px] font-bold text-emerald-800 border border-emerald-600/30">
-                                            {locale === 'ar' ? 'مؤكد' : 'Confirmed'}
-                                          </span>
-                                        ) : null}
-                                        {isOnlineBooking(b) ? (
-                                          <span className="shrink-0 rounded bg-sky-600/15 px-1 py-0.5 text-[9px] font-bold text-sky-800 border border-sky-600/30">
-                                            {locale === 'ar' ? 'أونلاين' : 'Online'}
-                                          </span>
-                                        ) : isShopBooking(b) ? (
-                                          <span className="shrink-0 rounded bg-amber-600/15 px-1 py-0.5 text-[9px] font-bold text-amber-800 border border-amber-600/30">
-                                            {locale === 'ar' ? 'في المحل' : 'Shop'}
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                  <p className="truncate text-[11px] opacity-80">
-                                    {serviceName}
-                                  </p>
+                              <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden px-2 py-1">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="min-w-0 flex-1 truncate text-[13px] font-bold leading-tight">{customerName}</p>
+                                  {isOnlineBooking(b) ? (
+                                    <Globe className="size-3.5 shrink-0 opacity-70" aria-label={locale === 'ar' ? 'أونلاين' : 'Online'} />
+                                  ) : isShopBooking(b) ? (
+                                    <Store className="size-3.5 shrink-0 opacity-70" aria-label={locale === 'ar' ? 'في المحل' : 'In shop'} />
+                                  ) : null}
+                                  {b.status === 'pending' ? (
+                                    <span className="size-2 shrink-0 rounded-full bg-amber-500" aria-label={locale === 'ar' ? 'مستني' : 'Pending'} />
+                                  ) : null}
                                 </div>
-                                <div className="mt-0.5 flex items-center justify-between gap-1 text-[10px] opacity-75 font-latin">
-                                  <span>{formatCairoTime(b.start_at, locale)}</span>
-                                  <span>{b.duration_minutes}m</span>
-                                </div>
+                                <p className="truncate text-[11px] leading-tight opacity-80">
+                                  <span dir="ltr" className="font-latin font-semibold">{formatCairoTime(b.start_at, locale)}</span>
+                                  {' · '}
+                                  {serviceName}
+                                </p>
+                                {heightPx >= 84 ? (
+                                  <p className="font-latin text-[10px] opacity-60">{b.duration_minutes} {locale === 'ar' ? 'دقيقة' : 'min'}</p>
+                                ) : null}
                               </div>
                             </div>
                           );
