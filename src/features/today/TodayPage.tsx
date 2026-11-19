@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { BookingDetailPanel } from '@/components/booking/BookingDetailPanel';
 import { WalkInModal } from '@/features/walkin/WalkInForm';
-import { Avatar, useStaff, type StaffMember } from '@/features/staff/StaffPage';
+import { Avatar, staffBadges, useStaff, type StaffMember } from '@/features/staff/StaffPage';
 import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { Columns3 } from 'lucide-react';
 import {
@@ -204,6 +204,7 @@ export function TodayPage() {
   const staffAll = useStaff().data ?? [];
   const activeStaff = staffAll.filter((m) => m.is_active);
   const showStaffUI = activeStaff.length >= 2;
+  const badges = useMemo(() => staffBadges(staffAll), [staffAll]);
   const [staffFilter, setStaffFilter] = useState<string>('all');
   const [columnsMode, setColumnsMode] = useState<boolean>(() => {
     try {
@@ -680,7 +681,7 @@ export function TodayPage() {
                 staffFilter === m.id ? 'border-gold bg-gold text-espresso' : 'border-default bg-white text-ink-70 hover:bg-sand',
               )}
             >
-              <Avatar name={m.name} photo={m.photo} className="size-7 text-xs" />
+              <Avatar name={m.name} photo={m.photo} badge={badges.get(m.id)} className="size-7 text-xs" />
               {m.name}
             </button>
           ))}
@@ -821,7 +822,7 @@ export function TodayPage() {
                       >
                         {columnsActive && staff ? (
                           <div className="flex flex-col items-center gap-0.5">
-                            <Avatar name={staff.name} photo={staff.photo} className="size-8 text-sm" />
+                            <Avatar name={staff.name} photo={staff.photo} badge={badges.get(staff.id)} className="size-8 text-sm" />
                             <span className="max-w-full truncate px-1 text-xs font-bold text-espresso">{staff.name}</span>
                           </div>
                         ) : (
@@ -1017,9 +1018,12 @@ export function TodayPage() {
                                   {showStaffUI && !staff && bookingStaffId(b) ? (
                                     <span
                                       title={staffAll.find((m) => m.id === bookingStaffId(b))?.name ?? ''}
-                                      className="flex size-4 shrink-0 items-center justify-center rounded-full bg-espresso/80 text-[9px] font-bold text-cream"
+                                      className={cn(
+                                        'flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1 text-[9px] font-bold',
+                                        badges.get(bookingStaffId(b) ?? '')?.cls ?? 'bg-espresso/80 text-cream',
+                                      )}
                                     >
-                                      {(staffAll.find((m) => m.id === bookingStaffId(b))?.name ?? '?').trim().charAt(0).toUpperCase()}
+                                      {badges.get(bookingStaffId(b) ?? '')?.label ?? '?'}
                                     </span>
                                   ) : null}
                                   {b.status === 'pending_payment' ? (

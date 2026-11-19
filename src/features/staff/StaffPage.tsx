@@ -55,13 +55,51 @@ async function compressImage(file: File, size = 256): Promise<string> {
   return canvas.toDataURL('image/jpeg', 0.72);
 }
 
-export function Avatar({ name, photo, className }: { name: string; photo?: string | null; className?: string }) {
+const BADGE_COLORS = [
+  'bg-gold/30 text-espresso',
+  'bg-sky-200 text-sky-900',
+  'bg-emerald-200 text-emerald-900',
+  'bg-rose-200 text-rose-900',
+  'bg-violet-200 text-violet-900',
+  'bg-amber-200 text-amber-900',
+];
+
+export interface StaffBadge {
+  label: string;
+  cls: string;
+}
+
+/** حرف/حروف مميزة ولون لكل حلاق. لو في اسمين بنفس الحرف الأول بنزوّد الحروف (احمد وامجد = اح / ام) واللون بيفرّق برضه */
+export function staffBadges(list: StaffMember[]): Map<string, StaffBadge> {
+  const clean = (n: string) => n.trim().replace(/\s+/g, ' ');
+  const labelAt = (name: string, level: number) => {
+    const words = clean(name).split(' ');
+    const w0 = Array.from(words[0] ?? '');
+    const w1 = Array.from(words[1] ?? '');
+    if (level === 1) return (w0[0] ?? '?').toUpperCase();
+    if (level === 2) return ((w0[0] ?? '') + (w1[0] ?? w0[1] ?? '')).toUpperCase();
+    return w0.slice(0, 3).join('').toUpperCase();
+  };
+  let level = 3;
+  for (const l of [1, 2, 3]) {
+    const set = new Set(list.map((m) => labelAt(m.name, l)));
+    if (set.size === list.length) {
+      level = l;
+      break;
+    }
+  }
+  const map = new Map<string, StaffBadge>();
+  list.forEach((m, i) => map.set(m.id, { label: labelAt(m.name, level), cls: BADGE_COLORS[i % BADGE_COLORS.length] ?? BADGE_COLORS[0]! }));
+  return map;
+}
+
+export function Avatar({ name, photo, className, badge }: { name: string; photo?: string | null; className?: string; badge?: StaffBadge }) {
   if (photo) {
     return <img src={photo} alt={name} className={cn('rounded-full object-cover', className)} />;
   }
   return (
-    <span className={cn('flex items-center justify-center rounded-full bg-gold/25 font-bold text-espresso', className)} aria-hidden>
-      {name.trim().charAt(0).toUpperCase() || <UserRound className="size-1/2" />}
+    <span className={cn('flex items-center justify-center rounded-full font-bold', badge?.cls ?? 'bg-gold/25 text-espresso', className)} aria-hidden>
+      {badge?.label || name.trim().charAt(0).toUpperCase() || <UserRound className="size-1/2" />}
     </span>
   );
 }
@@ -207,6 +245,140 @@ function ScheduleModal({ member, onClose }: { member: StaffMember; onClose: () =
   );
 }
 
+type SvcRow = { id: string; name_ar: string; name_en: string; price_egp: number | string; is_extra: boolean };
+
+/** خدمات وأسعار حلاق: بيقدّم الخدمة ولا لأ، وسعر مختلف (فاضي = نفس سعر الصالون) */
+function ServicesModal({ member, onClose }: { member: StaffMember; onClose: () => void }) {
+  const { i18n } = useTranslation();
+  const isAr = !!i18n.language?.startsWith('ar');
+  const L = (ar: string, en: string) => (isAr ? ar : en);
+  const queryClient = useQueryClient();
+  const [rows, setRows] = useState<Record<string, { offered: boolean; price: string }> | null>(null);
+  const [svcs, setSvcs] = useState<SvcRow[]>([]);
+
+  const loadQ = useQuery({
+    queryKey: ['staff-services-edit', member.id],
+    gcTime: 0,
+    queryFn: async () => {
+      const [sv, ss] = await Promise.all([
+        untypedDb.from('services').select('id, name_ar, name_en, price_egp, is_extra, is_active').eq('is_active', true).order('is_extra').order('sort_order'),
+        untypedDb.from('staff_services').select('service_id, is_offered, price_egp').eq('staff_id', member.id),
+      ]);
+      if (sv.error) throw sv.error;
+      if (ss.error) throw ss.error;
+      const list = (sv.data ?? []) as SvcRow[];
+      const over = new Map(((ss.data ?? []) as Array<{ service_id: string; is_offered: boolean; price_egp: number | string | null }>).map((r) => [r.service_id, r]));
+      const next: Record<string, { offered: boolean; price: string }> = {};
+      for (const sv1 of list) {
+        const o = over.get(sv1.id);
+        next[sv1.id] = { offered: o ? o.is_offered : true, price: o?.price_egp != null ? String(o.price_egp) : '' };
+      }
+      setSvcs(list);
+      setRows(next);
+      return true;
+    },
+  });
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!rows) return;
+      for (const sv1 of svcs) {
+        const r = rows[sv1.id];
+        if (!r) continue;
+        const price = r.price.trim() === '' ? null : Number(r.price);
+        if (price !== null && (!Number.isFinite(price) || price < 0)) throw new Error('PRICE');
+        if (r.offered && price === null) {
+          const { error } = await untypedDb.from('staff_services').delete().eq('staff_id', member.id).eq('service_id', sv1.id);
+          if (error) throw error;
+        } else {
+          const { error } = await untypedDb
+            .from('staff_services')
+            .upsert({ staff_id: member.id, service_id: sv1.id, is_offered: r.offered, price_egp: price }, { onConflict: 'staff_id,service_id' });
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: () => {
+      toast.success(L('اتحفظت الخدمات والأسعار', 'Saved'));
+      void queryClient.invalidateQueries({ queryKey: ['staff-services'] });
+      onClose();
+    },
+    onError: (e) =>
+      toast.error((e as Error).message === 'PRICE' ? L('اكتب سعر صحيح', 'Enter a valid price') : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again'), {
+        description: (e as Error).message === 'PRICE' ? undefined : errMsg(e),
+      }),
+  });
+
+  const renderGroup = (title: string, extra: boolean) => {
+    const group = svcs.filter((x) => x.is_extra === extra);
+    if (group.length === 0 || !rows) return null;
+    return (
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-espresso">{title}</p>
+        {group.map((sv1) => {
+          const r = rows[sv1.id];
+          if (!r) return null;
+          return (
+            <div key={sv1.id} className={cn('rounded-btn border border-default p-2.5', !r.offered && 'opacity-60')}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-sm font-medium">{isAr ? sv1.name_ar : sv1.name_en}</span>
+                <label className="flex shrink-0 items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-gold"
+                    checked={r.offered}
+                    onChange={(e) => setRows({ ...rows, [sv1.id]: { ...r, offered: e.target.checked } })}
+                  />
+                  {L('بيقدّمها', 'Offers')}
+                </label>
+              </div>
+              {r.offered ? (
+                <div className="mt-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    inputMode="decimal"
+                    label={L(`سعر مختلف (الأساسي ${sv1.price_egp})`, `Custom price (base ${sv1.price_egp})`)}
+                    placeholder={String(sv1.price_egp)}
+                    value={r.price}
+                    onChange={(e) => setRows({ ...rows, [sv1.id]: { ...r, price: e.target.value } })}
+                  />
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center p-4 lg:items-center">
+      <div className="absolute inset-0 bg-espresso/50" onClick={onClose} />
+      <div className="relative max-h-[90dvh] w-full max-w-md space-y-3 overflow-y-auto rounded-card bg-white p-4">
+        <h2 className="text-lg font-semibold">{L(`خدمات وأسعار ${member.name}`, `${member.name}'s services & prices`)}</h2>
+        <p className="text-xs text-ink-70">
+          {L('كله زي الصالون لحد ما تغيّر. سيب السعر فاضي لو نفس السعر، وشيل علامة "بيقدّمها" لو الحلاق ده مبيعملش الخدمة.', 'Everything matches the shop until you change it. Leave price empty for the same price; untick "Offers" if he does not do the service.')}
+        </p>
+        {loadQ.isError ? (
+          <p className="rounded-btn bg-danger/10 p-3 text-sm text-danger">{L('معرفتش أحمّل: ', 'Could not load: ')}{errMsg(loadQ.error)}</p>
+        ) : !rows ? (
+          <Skeleton className="h-40" />
+        ) : (
+          <>
+            {renderGroup(L('الخدمات', 'Services'), false)}
+            {renderGroup(L('الإضافات', 'Add-ons'), true)}
+          </>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={onClose}>{L('إلغاء', 'Cancel')}</Button>
+          <Button loading={save.isPending} disabled={!rows} onClick={() => save.mutate()}>{L('حفظ', 'Save')}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const EMPTY: FormState = { id: null, name: '', bio: '', bioEn: '', socials: {}, years: '', photo: '' };
 
 const SOCIAL_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
@@ -229,6 +401,8 @@ export function StaffPage() {
   const L = (ar: string, en: string) => (isAr ? ar : en);
   const queryClient = useQueryClient();
   const staffQuery = useStaff();
+  const badges = staffBadges(staffQuery.data ?? []);
+  const [servicesFor, setServicesFor] = useState<StaffMember | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [toDelete, setToDelete] = useState<StaffMember | null>(null);
   const [scheduleFor, setScheduleFor] = useState<StaffMember | null>(null);
@@ -368,7 +542,7 @@ export function StaffPage() {
         <ul className="space-y-2">
           {list.map((m) => (
             <li key={m.id} className={cn('flex min-w-0 items-center gap-3 overflow-hidden rounded-card border border-default bg-white p-3', !m.is_active && 'opacity-60')}>
-              <Avatar name={m.name} photo={m.photo} className="size-14 shrink-0 text-xl" />
+              <Avatar name={m.name} photo={m.photo} badge={badges.get(m.id)} className="size-14 shrink-0 text-xl" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-espresso">
                   {m.name}
@@ -392,6 +566,9 @@ export function StaffPage() {
                 )}
                 <button type="button" onClick={() => setScheduleFor(m)} className="rounded-full bg-sand px-2 py-0.5 text-xs font-medium text-espresso">
                   {L('جدول الشغل', 'Schedule')}
+                </button>
+                <button type="button" onClick={() => setServicesFor(m)} className="rounded-full bg-sand px-2 py-0.5 text-xs font-medium text-espresso">
+                  {L('الخدمات والأسعار', 'Services & prices')}
                 </button>
                 {!m.is_owner && !list.some((x) => x.is_owner) ? (
                   <button type="button" onClick={() => makeOwner.mutate(m.id)} disabled={makeOwner.isPending} className="rounded-full bg-gold/25 px-2 py-0.5 text-xs font-medium text-espresso">
@@ -503,6 +680,7 @@ export function StaffPage() {
         </div>
       ) : null}
 
+      {servicesFor ? <ServicesModal member={servicesFor} onClose={() => setServicesFor(null)} /> : null}
       {scheduleFor ? <ScheduleModal member={scheduleFor} onClose={() => setScheduleFor(null)} /> : null}
 
       <ConfirmDialog

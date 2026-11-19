@@ -39,6 +39,7 @@ export function BreaksPage() {
     staff_id: '',
   });
   const staffList = (useStaff().data ?? []).filter((m) => m.is_active);
+  const ownerId = staffList.find((m) => m.is_owner)?.id ?? '';
   const staffName = (id?: string | null) => staffList.find((m) => m.id === id)?.name ?? null;
 
   const { data: breaks = [], isLoading } = useQuery({
@@ -119,7 +120,7 @@ export function BreaksPage() {
 
   const startAdd = () => {
     setEditingId(null);
-    setForm({ reason: '', start_time: '14:30', end_time: '15:30', days_of_week: ALL_DAYS, staff_id: '' });
+    setForm({ reason: '', start_time: '14:30', end_time: '15:30', days_of_week: ALL_DAYS, staff_id: ownerId });
     setShowForm(true);
   };
 
@@ -166,7 +167,7 @@ export function BreaksPage() {
                   onChange={(e) => setForm({ ...form, staff_id: e.target.value })}
                   className="mt-1 min-h-11 w-full rounded-btn border border-default bg-white px-3 text-sm"
                 >
-                  <option value="">{isAr ? 'المحل كله (كل الحلاقين)' : 'Whole shop (all barbers)'}</option>
+                  <option value="">{isAr ? 'المحل كله (استثنائي، بيقفل على كل الحلاقين)' : 'Whole shop (exceptional, blocks all barbers)'}</option>
                   {staffList.map((m) => (
                     <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
