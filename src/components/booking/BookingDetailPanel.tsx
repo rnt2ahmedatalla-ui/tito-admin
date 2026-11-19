@@ -242,6 +242,14 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
         : st === 'rejected'
           ? L('اترفض', 'Rejected')
           : null;
+  // ملاحظات داخلية بتتكتب أوتوماتيك (مش من العميل) فمش بنعرضها
+  const noteText = (b.notes ?? '').trim();
+  const showNote = !!noteText && !/walk-?in\s*via\s*admin/i.test(noteText);
+  const cancelReasonText = (b.cancel_reason ?? '')
+    .replace(/^cancelled by admin$/i, L('اتلغى من الأدمن', 'Cancelled by admin'))
+    .replace(/^cancelled by customer$/i, L('اتلغى من العميل', 'Cancelled by customer'));
+  // زرار "تمت الحلاقة / لم يحضر" بيظهر قبل الميعاد بربع ساعة وبعده
+  const nearOrAfter = Date.now() >= new Date(b.start_at).getTime() - 15 * 60000;
   const canAct = b.status !== 'cancelled' && b.status !== 'completed' && b.status !== 'expired';
 
   const Section = ({ title, children }: { title: string; children: ReactNode }) => (
@@ -313,7 +321,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
               </div>
             ))}
           </div>
-          {b.notes?.trim() ? (
+          {showNote ? (
             <div className="mt-2 rounded-btn bg-sand/50 p-2.5 text-sm">
               <p className="mb-0.5 text-xs text-ink-70">{t('booking.notes')}</p>
               <p className="whitespace-pre-wrap">{b.notes}</p>
@@ -369,7 +377,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
                 {formatCairoDateShort(b.reviewed_at)} {formatCairoTime(b.reviewed_at, locale)}
               </p>
             ) : null}
-            {b.cancel_reason ? <p className="text-sm text-ink-70">{b.cancel_reason}</p> : null}
+            {b.cancel_reason ? <p className="text-sm text-ink-70">{cancelReasonText}</p> : null}
           </Section>
         ) : null}
 
@@ -404,13 +412,13 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
               </Button>
             </div>
           ) : null}
-          {b.status === 'confirmed' ? (
+          {b.status === 'confirmed' && nearOrAfter ? (
             <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => void setStatus.mutate({ id: b.id, status: 'completed' })}>
-                {t('booking.markCompleted')}
+                {L('تمت الحلاقة ✓', 'Done ✓')}
               </Button>
               <Button variant="secondary" onClick={() => void setStatus.mutate({ id: b.id, status: 'no_show' })}>
-                {t('booking.markNoShow')}
+                {L('ما حضرش', 'No-show')}
               </Button>
             </div>
           ) : null}
