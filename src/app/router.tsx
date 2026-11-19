@@ -1,12 +1,16 @@
 import { lazy, Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { StaffShell } from '@/components/layout/StaffShell';
+import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 const TodayPage = lazy(() => import('@/features/today/TodayPage').then((m) => ({ default: m.TodayPage })));
 const RoutinePage = lazy(() => import('@/features/routine/RoutinePage').then((m) => ({ default: m.RoutinePage })));
 const BookingsPage = lazy(() => import('@/features/bookings/BookingsPage').then((m) => ({ default: m.BookingsPage })));
 const MorePage = lazy(() => import('@/features/more/MorePage').then((m) => ({ default: m.MorePage })));
+const BackupPage = lazy(() => import('@/features/backup/BackupPage').then((m) => ({ default: m.BackupPage })));
+const AuditPage = lazy(() => import('@/features/audit/AuditPage').then((m) => ({ default: m.AuditPage })));
 const ExtrasPage = lazy(() => import('@/features/extras/ExtrasPage').then((m) => ({ default: m.ExtrasPage })));
 const StaffPage = lazy(() => import('@/features/staff/StaffPage').then((m) => ({ default: m.StaffPage })));
 const FinancePage = lazy(() => import('@/features/finance/FinancePage').then((m) => ({ default: m.FinancePage })));
@@ -33,6 +37,19 @@ function PageLoader() {
 }
 
 export function AppRouter() {
+  const { role } = useAuth();
+  if (role === 'staff') {
+    return (
+      <HashRouter>
+        <Routes>
+          <Route element={<StaffShell />}>
+            <Route index element={<Suspense fallback={<PageLoader />}><TodayPage /></Suspense>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </HashRouter>
+    );
+  }
   return (
     <HashRouter>
       <Routes>
@@ -54,6 +71,8 @@ export function AppRouter() {
           <Route path="more/walk-in" element={<Suspense fallback={<PageLoader />}><WalkInPage /></Suspense>} />
           <Route path="more/maintenance" element={<Suspense fallback={<PageLoader />}><MaintenancePage /></Suspense>} />
           <Route path="more/reports" element={<Navigate to="/more/finance?tab=bookingsReport" replace />} />
+          <Route path="more/backup" element={<Suspense fallback={<PageLoader />}><BackupPage /></Suspense>} />
+          <Route path="more/audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
           <Route path="more/extras" element={<Suspense fallback={<PageLoader />}><ExtrasPage /></Suspense>} />
           <Route path="more/staff" element={<Suspense fallback={<PageLoader />}><StaffPage /></Suspense>} />
           <Route path="more/finance" element={<Suspense fallback={<PageLoader />}><FinancePage /></Suspense>} />

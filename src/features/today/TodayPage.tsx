@@ -24,6 +24,8 @@ import {
   hourLabel,
 } from '@/lib/time';
 import { cn } from '@/lib/cn';
+import { useAuth } from '@/hooks/useAuth';
+import { TodayAlerts } from '@/features/extras/TodayAlerts';
 import { first, isOnlineBooking, isShopBooking } from '@/lib/booking';
 
 type ViewMode = 'day' | 'three' | 'week';
@@ -104,6 +106,7 @@ function layoutLanes(items: { id: string; s: number; e: number }[]) {
 
 export function TodayPage() {
   const { t, i18n } = useTranslation();
+  const readOnly = useAuth().role === 'staff';
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const isPhone = window.matchMedia('(max-width: 1023px)').matches;
@@ -470,6 +473,7 @@ export function TodayPage() {
   };
 
   const handleSlotClick = (day: Date, hour: number, minute = 0, staffId = '') => {
+    if (readOnly) return;
     setWalkInStaff(staffId);
     const dateStr = cairoDateString(day);
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -480,6 +484,7 @@ export function TodayPage() {
   };
 
   const handleFabClick = () => {
+    if (readOnly) return;
     const dateStr = cairoDateString(selectedDate);
     const nowH = toCairo(new Date()).getHours();
     const nextH = Math.min(21, Math.max(gridStartHour, nowH + 1));
@@ -495,6 +500,7 @@ export function TodayPage() {
 
   return (
     <div className="space-y-4">
+      {readOnly ? null : <TodayAlerts />}
       {/* Setmore Header with Month/Year Title & Notifications Bell */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-default pb-3.5">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -1066,6 +1072,7 @@ export function TodayPage() {
       )}
 
       {/* Floating Action Button (+) */}
+      {readOnly ? null : (
       <button
         type="button"
         onClick={handleFabClick}
@@ -1074,6 +1081,7 @@ export function TodayPage() {
       >
         <Plus className="size-6 stroke-[2.5]" />
       </button>
+      )}
 
       {/* Shared Quick Walk-In Booking Modal */}
       <WalkInModal

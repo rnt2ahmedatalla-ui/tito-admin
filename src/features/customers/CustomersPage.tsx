@@ -16,6 +16,7 @@ import { formatEGP } from '@/lib/money';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
+import { CustomerFile } from './CustomerFile';
 
 const PAGE_SIZE = 25;
 
@@ -54,6 +55,11 @@ function CustomerCard({
           {customer.is_blocked ? (
             <span className="mt-2 inline-flex rounded-pill bg-danger/15 px-2 py-0.5 text-xs font-medium text-danger">
               {t('customers.blocked')}
+            </span>
+          ) : null}
+          {customer.no_show_count >= 2 ? (
+            <span className="mt-2 ms-1 inline-flex rounded-pill bg-warning/15 px-2 py-0.5 text-xs font-medium text-espresso">
+              ⚠ {customer.no_show_count}
             </span>
           ) : null}
         </div>
@@ -138,15 +144,15 @@ function CustomerDetailPanel({
     if (template === 'custom') return customText;
     if (template === 'discount')
       return isAr
-        ? `أهلاً ${firstName} 👋\\nوحشتنا! عندنا خصم 10% على زيارتك الجاية.\\nاحجز من هنا:\\n${bookUrl}`
-        : `Hi ${firstName} 👋\\nWe miss you! Enjoy 10% off your next visit.\\nBook here:\\n${bookUrl}`;
+        ? `أهلاً ${firstName} 👋\nوحشتنا! عندنا خصم 10% على زيارتك الجاية.\nاحجز من هنا:\n${bookUrl}`
+        : `Hi ${firstName} 👋\nWe miss you! Enjoy 10% off your next visit.\nBook here:\n${bookUrl}`;
     if (template === 'miss')
       return isAr
-        ? `أهلاً ${firstName} 👋\\nمن زمان ماجتش عندنا. تحب تحجز معاد جديد؟\\n${bookUrl}`
-        : `Hi ${firstName} 👋\\nWe haven't seen you in a while. Want to book a new time?\\n${bookUrl}`;
+        ? `أهلاً ${firstName} 👋\nمن زمان ماجتش عندنا. تحب تحجز معاد جديد؟\n${bookUrl}`
+        : `Hi ${firstName} 👋\nWe haven't seen you in a while. Want to book a new time?\n${bookUrl}`;
     return isAr
-      ? `أهلاً ${firstName} 👋\\nكوبون الخصم بتاعك: ${couponCode.trim().toUpperCase()}\\nاحجز من هنا وطبّقه:\\n${bookUrl}`
-      : `Hi ${firstName} 👋\\nYour discount code: ${couponCode.trim().toUpperCase()}\\nBook here and apply it:\\n${bookUrl}`;
+      ? `أهلاً ${firstName} 👋\nكوبون الخصم بتاعك: ${couponCode.trim().toUpperCase()}\nاحجز من هنا وطبّقه:\n${bookUrl}`
+      : `Hi ${firstName} 👋\nYour discount code: ${couponCode.trim().toUpperCase()}\nBook here and apply it:\n${bookUrl}`;
   })();
 
   const sendWhatsApp = () => {
@@ -207,6 +213,8 @@ function CustomerDetailPanel({
             </p>
           </div>
         </div>
+
+        <CustomerFile userId={customer.id} />
 
         <div className="space-y-2">
           <p className="font-semibold text-espresso">{isAr ? 'آخر الحجوزات' : 'Recent bookings'}</p>

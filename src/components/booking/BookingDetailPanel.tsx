@@ -7,6 +7,8 @@ import type { BookingWithRelations } from '@/types/database';
 import { normalizeBooking, isOnlineBooking, isShopBooking } from '@/lib/booking';
 import { Sheet } from '@/components/ui/Sheet';
 import { PackageUse } from '@/features/extras/PackageUse';
+import { CustomerFlags, RateRequest } from '@/features/extras/BookingExtras';
+import { useAuth } from '@/hooks/useAuth';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -34,6 +36,7 @@ const REBOOK_URL = `${CUSTOMER_BASE_URL}/book`;
 export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPanelProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const isStaff = useAuth().role === 'staff';
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
@@ -236,7 +239,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
 
   const b = normalizeBooking(booking);
   const name = b.profile?.full_name ?? '—';
-  const phone = b.profile?.phone ?? '';
+  const phone = isStaff ? '' : (b.profile?.phone ?? '');
   const waUrl = phone ? buildWhatsAppUrl(phone, '') : null;
   const locale = i18n.language;
   const offeredAt =
@@ -325,12 +328,14 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
           ) : null}
         </div>
 
+        {isStaff ? null : <CustomerFlags userId={b.user_id} />}
+
         {/* الميعاد والخدمة */}
         <Section title={L('الحجز', 'Appointment')}>
           <Row label={L('الميعاد', 'When')}>
             <span className="font-latin">{formatCairoDateShort(b.start_at)} · {formatCairoTime(b.start_at, locale)}</span>
           </Row>
-          {staffList.length >= 2 ? (
+          {staffList.length >= 2 && !isStaff ? (
             <div className="flex items-center justify-between gap-3 py-1 text-sm">
               <span className="shrink-0 text-ink-70">{L('الحلاق', 'Barber')}</span>
               <select
@@ -349,12 +354,12 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
           <div className="mt-1 border-t border-bark/10 pt-2">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-medium text-espresso">{isAr ? b.service_name_ar : b.service_name_en}</span>
-              <span className="font-latin text-ink-70">{formatEGP(Number(b.price_egp) - extrasTotal + (hasCoupon ? discount : 0))}</span>
+              {isStaff ? null : <span className="font-latin text-ink-70">{formatEGP(Number(b.price_egp) - extrasTotal + (hasCoupon ? discount : 0))}</span>}
             </div>
             {extrasList.map((extra) => (
               <div key={extra.id} className="mt-1 flex items-center justify-between gap-3 text-sm text-ink-70">
                 <span>+ {isAr ? extra.name_ar : extra.name_en}</span>
-                <span className="font-latin">{formatEGP(extra.price_egp)}</span>
+                {isStaff ? null : <span className="font-latin">{formatEGP(extra.price_egp)}</span>}
               </div>
             ))}
           </div>
@@ -367,6 +372,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
         </Section>
 
         {/* الدفع */}
+        {isStaff ? null : (
         <Section title={L('الدفع', 'Payment')}>
           {hasCoupon ? (
             <>
@@ -406,8 +412,9 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
             </div>
           ) : null}
         </Section>
+        )}
 
-        {(b.reviewed_at || b.cancelled_by || b.cancel_reason) ? (
+        {isStaff ? null : (b.reviewed_at || b.cancelled_by || b.cancel_reason) ? (
           <Section title={t('booking.auditHistory')}>
             {b.reviewed_at ? (
               <p className="text-sm text-ink-70 font-latin">
@@ -438,6 +445,11 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
         ) : null}
 
         {/* الإجراءات */}
+        {isStaff ? null : (
+        <>
+        {b.status === 'completed' ? (
+          <RateRequest rateToken={(b as unknown as { rate_token?: string | null }).rate_token} phone={phone} name={name} />
+        ) : null}
         {b.status === 'confirmed' || b.status === 'completed' ? (
           <PackageUse
             bookingId={b.id}
@@ -485,6 +497,8 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
             </div>
           ) : null}
         </div>
+        </>
+        )}
       </div>
 
       <ConfirmDialog
