@@ -352,7 +352,7 @@ export function TodayPage() {
     <div className="space-y-4">
       {/* Setmore Header with Month/Year Title & Notifications Bell */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-default pb-3.5">
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -376,15 +376,6 @@ export function TodayPage() {
             <h1 className="text-xl font-bold capitalize text-espresso sm:text-2xl">{monthTitle}</h1>
           </div>
 
-          <Button
-            variant="secondary"
-            size="sm"
-            className="ms-1 hidden sm:inline-flex"
-            onClick={() => setSelectedDate(new Date())}
-          >
-            {t('today.jumpToday')}
-          </Button>
-
           <button
             type="button"
             onClick={() => {
@@ -396,6 +387,19 @@ export function TodayPage() {
             <CalendarDays className="size-3.5 text-gold" />
             <span>{cairoDateString(selectedDate)}</span>
           </button>
+
+          {/* زرار "النهارده": على الموبايل بيظهر بس لما تبعد عن النهارده، وعلى اللابتوب دايماً */}
+          <Button
+            variant="secondary"
+            size="sm"
+            className={cn(
+              'shrink-0',
+              cairoDateString(selectedDate) === cairoDateString(new Date()) ? 'hidden sm:inline-flex' : 'inline-flex',
+            )}
+            onClick={() => setSelectedDate(new Date())}
+          >
+            {t('today.jumpToday')}
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">
