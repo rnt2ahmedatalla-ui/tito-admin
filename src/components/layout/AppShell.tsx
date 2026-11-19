@@ -3,15 +3,16 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Calendar,
-  CreditCard,
-  Bell,
+  ClipboardCheck,
   List,
+  Wallet,
   MoreHorizontal,
   Globe,
   LogOut,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 import { NotificationsBell } from '@/components/layout/NotificationsBell';
+import { navGroups } from '@/components/layout/navConfig';
 import { CountBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
@@ -21,31 +22,13 @@ import { useState } from 'react';
 import { useUnreadBookingCount } from '@/hooks/useBookingLog';
 import { useGlobalShortcuts } from '@/hooks/useKeyboardShortcuts';
 
+// شريط الموبايل: 5 أماكن بس، والباقي في "المزيد"
 const mainTabs = [
   { to: '/', icon: Calendar, labelKey: 'nav.today' },
-  { to: '/payments', icon: CreditCard, labelKey: 'nav.payments', badge: 'payments' as const },
-  { to: '/reminders', icon: Bell, labelKey: 'nav.reminders', badge: 'reminders' as const },
-  { to: '/bookings', icon: List, labelKey: 'nav.bookings', mobileHidden: true },
+  { to: '/routine', icon: ClipboardCheck, labelKey: 'nav.routineShort', badge: 'routine' as const },
+  { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
+  { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
   { to: '/more', icon: MoreHorizontal, labelKey: 'nav.more' },
-];
-
-const sidebarLinks = [
-  ...mainTabs.slice(0, 4),
-  { to: '/more/staff', labelKey: 'nav.staff' },
-  { to: '/more/services', labelKey: 'nav.services' },
-  { to: '/more/hours', labelKey: 'nav.hours' },
-  { to: '/more/time-off', labelKey: 'nav.timeOff' },
-  { to: '/more/breaks', labelKey: 'nav.breaks' },
-  { to: '/more/products', labelKey: 'nav.products' },
-  { to: '/more/reviews', labelKey: 'nav.reviews' },
-  { to: '/more/customers', labelKey: 'nav.customers' },
-  { to: '/more/walk-in', labelKey: 'nav.walkIn' },
-  { to: '/more/reports', labelKey: 'nav.reports' },
-  { to: '/more/coupons', labelKey: 'nav.coupons' },
-  { to: '/more/finance', labelKey: 'nav.finance' },
-  { to: '/more/loyalty', labelKey: 'nav.loyalty' },
-  { to: '/more/settings', labelKey: 'nav.settings' },
-  { to: '/more/maintenance', labelKey: 'nav.maintenance' },
 ];
 
 function SidebarAction({
@@ -74,7 +57,7 @@ export function AppShell() {
   const { signOut } = useAuth();
   const { data: paymentsCount = 0 } = usePaymentsCount();
   const { data: remindersCount = 0 } = useUnreadBookingCount();
-  const badgeFor = (b?: 'payments' | 'reminders') => (b === 'payments' ? paymentsCount : b === 'reminders' ? remindersCount : 0);
+  const badgeFor = (b?: 'routine') => (b === 'routine' ? paymentsCount + remindersCount : 0);
   const location = useLocation();
   const [showHelp, setShowHelp] = useState(false);
 
@@ -99,30 +82,38 @@ export function AppShell() {
           </div>
           <NotificationsBell />
         </div>
-        <nav className="flex-1 overflow-y-auto py-4">
-          {sidebarLinks.map((link) => {
-            const Icon = 'icon' in link ? link.icon : undefined;
-            const showBadge = 'badge' in link && link.badge;
-            return (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.to === '/'}
-                className={({ isActive }) =>
-                  cn(
-                    'relative flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-150',
-                    isActive
-                      ? 'bg-bark/30 text-gold before:absolute before:inset-y-1 before:start-0 before:w-1 before:rounded-e before:bg-gold'
-                      : 'text-cream/80 hover:bg-bark/20 hover:text-cream',
-                  )
-                }
-              >
-                {Icon ? <Icon className="size-5 shrink-0" /> : null}
-                <span className="flex-1">{t(link.labelKey)}</span>
-                {showBadge ? <CountBadge count={badgeFor(link.badge)} /> : null}
-              </NavLink>
-            );
-          })}
+        <nav className="flex-1 space-y-4 overflow-y-auto py-4">
+          {navGroups.map((group) => (
+            <div key={group.id}>
+              {group.titleKey ? (
+                <p className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-cream/45">
+                  {t(group.titleKey)}
+                </p>
+              ) : null}
+              {group.items.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    end={link.to === '/'}
+                    className={({ isActive }) =>
+                      cn(
+                        'relative flex items-center gap-3 px-4 py-2 text-sm transition-colors duration-150',
+                        isActive
+                          ? 'bg-bark/30 text-gold before:absolute before:inset-y-1 before:start-0 before:w-1 before:rounded-e before:bg-gold'
+                          : 'text-cream/80 hover:bg-bark/20 hover:text-cream',
+                      )
+                    }
+                  >
+                    <Icon className="size-[18px] shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{t(link.labelKey)}</span>
+                    {link.badge ? <CountBadge count={badgeFor(link.badge)} /> : null}
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="space-y-2 border-t border-white/10 p-4">
           <SidebarAction
@@ -134,7 +125,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col lg:ms-64">
+      <div className="flex min-w-0 flex-1 flex-col lg:ms-64">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-white/5 bg-espresso px-3 text-cream lg:hidden">
           <div className="flex items-center gap-2">
             <Logo mark height={28} />
@@ -162,7 +153,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-content flex-1 p-4 pb-24 lg:p-6 lg:pb-6">
+        <main className="mx-auto w-full min-w-0 max-w-content flex-1 p-4 pb-24 lg:p-6 lg:pb-6">
           <Outlet />
         </main>
 
@@ -171,19 +162,22 @@ export function AppShell() {
           className="fixed inset-x-0 bottom-0 z-30 flex border-t border-bark/20 bg-espresso lg:hidden"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          {mainTabs.filter((tab) => !tab.mobileHidden).map((tab) => {
+          {mainTabs.map((tab) => {
             const Icon = tab.icon;
+            const p = location.pathname;
             const isActive =
               tab.to === '/'
-                ? location.pathname === '/'
-                : location.pathname.startsWith(tab.to);
+                ? p === '/'
+                : tab.to === '/more'
+                  ? p.startsWith('/more') && !p.startsWith('/more/finance')
+                  : p.startsWith(tab.to);
             return (
               <NavLink
                 key={tab.to}
                 to={tab.to}
                 end={tab.to === '/'}
                 className={cn(
-                  'relative flex flex-1 flex-col items-center gap-0.5 py-2 text-xs transition-colors',
+                  'relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2 text-[11px] transition-colors',
                   isActive ? 'text-gold' : 'text-cream/70',
                 )}
               >
@@ -195,7 +189,7 @@ export function AppShell() {
                     </span>
                   ) : null}
                 </span>
-                {t(tab.labelKey)}
+                <span className="max-w-full truncate px-0.5">{t(tab.labelKey)}</span>
               </NavLink>
             );
           })}

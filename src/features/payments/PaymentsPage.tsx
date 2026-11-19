@@ -16,8 +16,6 @@ import { mapError } from '@/lib/errors';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { openConfirmationWhatsApp } from '@/lib/confirmWhatsApp';
 import { cn } from '@/lib/cn';
-import { FinanceTab } from './FinanceTab';
-import { TransfersTab } from './TransfersTab';
 
 const SOUND_KEY = 'tito-admin-payment-sound';
 
@@ -169,10 +167,9 @@ function PaymentCard({
   );
 }
 
-export function PaymentsPage() {
+export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'queue' | 'history' | 'finance'>('queue');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -279,7 +276,6 @@ export function PaymentsPage() {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (tab !== 'queue') return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
 
@@ -288,7 +284,7 @@ export function PaymentsPage() {
       if (e.key === 'Enter' && payments[focusedIndex]) setConfirmId(payments[focusedIndex].id);
       if (e.key === 'r' && payments[focusedIndex]) setRejectId(payments[focusedIndex].id);
     },
-    [payments, focusedIndex, tab],
+    [payments, focusedIndex],
   );
 
   useEffect(() => {
@@ -306,13 +302,10 @@ export function PaymentsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-default pb-4">
-        <div>
-      
-          <h1 className="mt-1 text-2xl font-bold text-espresso">{t('payments.title')}</h1>
-          {tab === 'queue' ? (
-            <p className="mt-2 max-w-2xl text-sm text-ink-70">{t('payments.whatsappQueueHint')}</p>
-          ) : null}
+      <div className={cn('flex flex-wrap items-end justify-between gap-3', !embedded && 'border-b border-default pb-4')}>
+        <div className="min-w-0">
+          {embedded ? null : <h1 className="mt-1 text-2xl font-bold text-espresso">{t('payments.title')}</h1>}
+          <p className={cn('max-w-2xl text-sm text-ink-70', !embedded && 'mt-2')}>{t('payments.whatsappQueueHint')}</p>
         </div>
         <Button variant="ghost" size="sm" onClick={toggleSound} aria-pressed={soundOn}>
           {soundOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
@@ -320,41 +313,7 @@ export function PaymentsPage() {
         </Button>
       </div>
 
-      <div role="tablist" className="flex gap-2">
-        {(
-          [
-            { id: 'queue', label: t('payments.tabQueue'), count: payments.length },
-            { id: 'history', label: t('payments.tabHistory'), count: 0 },
-            { id: 'finance', label: t('payments.tabFinance'), count: 0 },
-          ] as const
-        ).map((tabItem) => (
-          <button
-            key={tabItem.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === tabItem.id}
-            onClick={() => setTab(tabItem.id)}
-            className={cn(
-              'flex-1 rounded-btn border px-3 py-2 text-sm font-semibold transition',
-              tab === tabItem.id
-                ? 'border-gold bg-gold/10 text-espresso'
-                : 'border-default text-ink-70 hover:bg-sand/40',
-            )}
-          >
-            {tabItem.label}
-            {tabItem.count > 0 ? (
-              <span className="ms-1.5 rounded-full bg-espresso px-1.5 py-0.5 font-latin text-[11px] text-cream">
-                {tabItem.count}
-              </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'finance' ? <FinanceTab /> : null}
-      {tab === 'history' ? <TransfersTab /> : null}
-
-      {tab !== 'queue' ? null : isLoading ? (
+      {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-48" />
           <Skeleton className="h-48" />

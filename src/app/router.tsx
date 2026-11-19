@@ -4,8 +4,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 const TodayPage = lazy(() => import('@/features/today/TodayPage').then((m) => ({ default: m.TodayPage })));
-const PaymentsPage = lazy(() => import('@/features/payments/PaymentsPage').then((m) => ({ default: m.PaymentsPage })));
-const RemindersPage = lazy(() => import('@/features/reminders/RemindersPage').then((m) => ({ default: m.RemindersPage })));
+const RoutinePage = lazy(() => import('@/features/routine/RoutinePage').then((m) => ({ default: m.RoutinePage })));
 const BookingsPage = lazy(() => import('@/features/bookings/BookingsPage').then((m) => ({ default: m.BookingsPage })));
 const MorePage = lazy(() => import('@/features/more/MorePage').then((m) => ({ default: m.MorePage })));
 const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
@@ -39,8 +38,9 @@ export function AppRouter() {
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<Suspense fallback={<PageLoader />}><TodayPage /></Suspense>} />
-          <Route path="payments" element={<Suspense fallback={<PageLoader />}><PaymentsPage /></Suspense>} />
-          <Route path="reminders" element={<Suspense fallback={<PageLoader />}><RemindersPage /></Suspense>} />
+          <Route path="routine" element={<Suspense fallback={<PageLoader />}><RoutinePage /></Suspense>} />
+          <Route path="payments" element={<Navigate to="/routine?t=payments" replace />} />
+          <Route path="reminders" element={<Navigate to="/routine?t=new" replace />} />
           <Route path="bookings" element={<Suspense fallback={<PageLoader />}><BookingsPage /></Suspense>} />
           <Route path="more" element={<Suspense fallback={<PageLoader />}><MorePage /></Suspense>} />
           <Route path="more/services" element={<Suspense fallback={<PageLoader />}><ServicesPage /></Suspense>} />

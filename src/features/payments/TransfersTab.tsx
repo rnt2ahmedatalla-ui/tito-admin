@@ -97,7 +97,7 @@ export function TransfersTab() {
   };
 
   const methodLabel = (m: string) =>
-    m === 'instapay' ? 'InstaPay' : m === 'vodafone_cash' ? (isAr ? 'فودافون كاش' : 'Vodafone Cash') : m;
+    m === 'instapay' ? 'InstaPay' : m === 'vodafone_cash' ? (isAr ? 'فودافون كاش' : 'Vodafone Cash') : m === 'pay_at_shop' ? (isAr ? 'الدفع في المحل' : 'Pay at shop') : m;
 
   if (listQuery.isLoading || hiddenQuery.isLoading) {
     return (

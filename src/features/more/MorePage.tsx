@@ -1,91 +1,77 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  Settings,
-  Users,
-  Scissors,
-  Clock,
-  CalendarOff,
-  Coffee,
-  Package,
-  UserPlus,
-  UserRound,
-  Wrench,
-  Star,
-  Gift,
-  Wallet,
-  BarChart3,
-  Ticket,
-  Globe,
-  LogOut,
-  ChevronLeft,
-} from 'lucide-react';
+import { Globe, LogOut } from 'lucide-react';
+import { navGroups } from '@/components/layout/navConfig';
+import { CountBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
+import { usePaymentsCount } from '@/hooks/usePaymentsCount';
+import { useUnreadBookingCount } from '@/hooks/useBookingLog';
 import { setLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
-
-const links = [
-  { to: '/more/reports', icon: BarChart3, labelKey: 'nav.reports' },
-  { to: '/more/coupons', icon: Ticket, labelKey: 'nav.coupons' },
-  { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
-  { to: '/more/loyalty', icon: Gift, labelKey: 'nav.loyalty' },
-  { to: '/more/staff', icon: UserRound, labelKey: 'nav.staff' },
-  { to: '/more/services', icon: Scissors, labelKey: 'nav.services' },
-  { to: '/more/hours', icon: Clock, labelKey: 'nav.hours' },
-  { to: '/more/time-off', icon: CalendarOff, labelKey: 'nav.timeOff' },
-  { to: '/more/breaks', icon: Coffee, labelKey: 'nav.breaks' },
-  { to: '/more/products', icon: Package, labelKey: 'nav.products' },
-  { to: '/more/reviews', icon: Star, labelKey: 'nav.reviews' },
-  { to: '/more/customers', icon: Users, labelKey: 'nav.customers' },
-  { to: '/more/walk-in', icon: UserPlus, labelKey: 'nav.walkIn' },
-  { to: '/more/settings', icon: Settings, labelKey: 'nav.settings' },
-  { to: '/more/maintenance', icon: Wrench, labelKey: 'nav.maintenance' },
-];
 
 export function MorePage() {
   const { t, i18n } = useTranslation();
   const { signOut } = useAuth();
+  const routineCount = (usePaymentsCount().data ?? 0) + (useUnreadBookingCount().data ?? 0);
+  // الأساسيات (اليوم/الروتين/الحجوزات/المالية) موجودة في الشريط تحت، فمش بنكررها هنا
+  const hidden = new Set(['/', '/routine', '/bookings', '/more/finance']);
 
   return (
-    <div className="space-y-4 lg:hidden">
-      <h1 className="text-2xl font-semibold">{t('nav.more')}</h1>
-      <nav className="space-y-1">
-        {links.map((link) => {
-          const Icon = link.icon;
-          return (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-btn px-4 py-3 text-base transition-colors',
-                  isActive ? 'bg-gold/15 text-espresso' : 'hover:bg-sand/60',
-                )
-              }
-            >
-              <Icon className="size-5 shrink-0" />
-              <span className="flex-1">{t(link.labelKey)}</span>
-              <ChevronLeft className="size-4 text-ink-70 rtl:-scale-x-100" />
-            </NavLink>
-          );
-        })}
-      </nav>
-      <button
-        type="button"
-        className="flex w-full items-center gap-3 rounded-btn px-4 py-3 hover:bg-sand/60"
-        onClick={() => setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
-      >
-        <Globe className="size-5" />
-        {t('app.language')}
-      </button>
-      <button
-        type="button"
-        className="flex w-full items-center gap-3 rounded-btn px-4 py-3 text-danger hover:bg-danger/10"
-        onClick={() => void signOut()}
-      >
-        <LogOut className="size-5" />
-        {t('app.signOut')}
-      </button>
+    <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-clip">
+      <h1 className="text-2xl font-bold text-espresso">{t('nav.more')}</h1>
+      {navGroups.map((group) => {
+        const items = group.items.filter((i) => !hidden.has(i.to));
+        if (items.length === 0) return null;
+        return (
+          <section key={group.id} className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-70">
+              {group.titleKey ? t(group.titleKey) : t('nav.groupQuick')}
+            </h2>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+              {items.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    className={({ isActive }) =>
+                      cn(
+                        'relative flex min-w-0 items-center gap-3 rounded-card border border-default bg-white px-3 py-3.5 text-sm font-medium text-espresso shadow-sm transition-colors hover:border-gold/60 hover:bg-gold/10',
+                        isActive && 'border-gold bg-gold/15',
+                      )
+                    }
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-btn bg-gold/15 text-gold">
+                      <Icon className="size-5" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{t(link.labelKey)}</span>
+                    {link.badge ? <CountBadge count={routineCount} /> : null}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+
+      <section className="grid grid-cols-2 gap-2.5 border-t border-default pt-4">
+        <button
+          type="button"
+          className="flex min-w-0 items-center justify-center gap-2 rounded-card border border-default bg-white px-3 py-3 text-sm font-medium text-espresso hover:bg-sand/50"
+          onClick={() => setLanguage(i18n.language?.startsWith('ar') ? 'en' : 'ar')}
+        >
+          <Globe className="size-4 shrink-0 text-gold" />
+          <span className="truncate">{i18n.language?.startsWith('ar') ? 'English' : 'عربي'}</span>
+        </button>
+        <button
+          type="button"
+          className="flex min-w-0 items-center justify-center gap-2 rounded-card border border-danger/30 bg-white px-3 py-3 text-sm font-medium text-danger hover:bg-danger/10"
+          onClick={() => void signOut()}
+        >
+          <LogOut className="size-4 shrink-0" />
+          <span className="truncate">{t('app.signOut')}</span>
+        </button>
+      </section>
     </div>
   );
 }
