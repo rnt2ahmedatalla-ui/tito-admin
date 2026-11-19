@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { cn } from '@/lib/cn';
 import { StaffAccessCard } from './StaffAccessCard';
+import { StaffEarnings } from './StaffEarnings';
 
 export interface StaffMember {
   id: string;
@@ -680,6 +681,8 @@ export function StaffPage() {
           </div>
         </div>
       ) : null}
+
+      <StaffEarnings />
 
       <StaffAccessCard />
 
