@@ -13,6 +13,7 @@ import {
   Wrench,
   Star,
   Gift,
+  Wallet,
   BarChart3,
   Ticket,
   Globe,
@@ -26,6 +27,7 @@ import { cn } from '@/lib/cn';
 const links = [
   { to: '/more/reports', icon: BarChart3, labelKey: 'nav.reports' },
   { to: '/more/coupons', icon: Ticket, labelKey: 'nav.coupons' },
+  { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
   { to: '/more/loyalty', icon: Gift, labelKey: 'nav.loyalty' },
   { to: '/more/staff', icon: UserRound, labelKey: 'nav.staff' },
   { to: '/more/services', icon: Scissors, labelKey: 'nav.services' },
