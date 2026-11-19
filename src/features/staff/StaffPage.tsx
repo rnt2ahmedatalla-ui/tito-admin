@@ -15,6 +15,8 @@ export interface StaffMember {
   id: string;
   name: string;
   bio: string | null;
+  bio_en: string | null;
+  socials: Record<string, string> | null;
   experience_years: number | null;
   photo: string | null;
   is_active: boolean;
@@ -28,11 +30,12 @@ export function useStaff() {
     queryFn: async (): Promise<StaffMember[]> => {
       const { data, error } = await untypedDb
         .from('staff')
-        .select('id, name, bio, experience_years, photo, is_active, is_owner, sort')
+        .select('id, name, bio, bio_en, socials, experience_years, photo, is_active, is_owner, sort')
         .order('sort', { ascending: true })
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return (data ?? []) as StaffMember[];
+      const rows = (data ?? []) as StaffMember[];
+      return [...rows].sort((a, b) => Number(b.is_owner) - Number(a.is_owner));
     },
     retry: false,
     staleTime: 30_000,
@@ -67,6 +70,8 @@ interface FormState {
   id: string | null;
   name: string;
   bio: string;
+  bioEn: string;
+  socials: Record<string, string>;
   years: string;
   photo: string;
 }
@@ -85,7 +90,7 @@ function ScheduleModal({ member, onClose }: { member: StaffMember; onClose: () =
   const [rows, setRows] = useState<Record<number, { off: boolean; start: string; end: string }> | null>(null);
   const [shop, setShop] = useState<WH[]>([]);
 
-  useQuery({
+  const loadQ = useQuery({
     queryKey: ['staff-schedule', member.id],
     gcTime: 0,
     queryFn: async () => {
@@ -140,7 +145,9 @@ function ScheduleModal({ member, onClose }: { member: StaffMember; onClose: () =
       onClose();
     },
     onError: (e) =>
-      toast.error((e as Error).message === 'RANGE' ? L('وقت النهاية لازم يبقى بعد البداية', 'End must be after start') : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again')),
+      toast.error((e as Error).message === 'RANGE' ? L('وقت النهاية لازم يبقى بعد البداية', 'End must be after start') : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again'), {
+        description: (e as Error).message === 'RANGE' ? undefined : errMsg(e),
+      }),
   });
 
   return (
@@ -151,7 +158,9 @@ function ScheduleModal({ member, onClose }: { member: StaffMember; onClose: () =
         <p className="text-xs text-ink-70">
           {L('بيبدأ زي مواعيد المحل. غيّر اليوم اللي عايزه يختلف، ومش هيقدر يشتغل برا ساعات المحل.', 'Starts the same as the shop. Change only the days that differ; he cannot work outside shop hours.')}
         </p>
-        {!rows ? (
+        {loadQ.isError ? (
+          <p className="rounded-btn bg-danger/10 p-3 text-sm text-danger">{L('معرفتش أحمّل الجدول: ', 'Could not load: ')}{errMsg(loadQ.error)}</p>
+        ) : !rows ? (
           <Skeleton className="h-40" />
         ) : (
           <ul className="space-y-2">
@@ -198,7 +207,21 @@ function ScheduleModal({ member, onClose }: { member: StaffMember; onClose: () =
   );
 }
 
-const EMPTY: FormState = { id: null, name: '', bio: '', years: '', photo: '' };
+const EMPTY: FormState = { id: null, name: '', bio: '', bioEn: '', socials: {}, years: '', photo: '' };
+
+const SOCIAL_FIELDS: Array<{ key: string; label: string; placeholder: string }> = [
+  { key: 'instagram', label: 'Instagram', placeholder: '@username' },
+  { key: 'facebook', label: 'Facebook', placeholder: 'facebook.com/username' },
+  { key: 'tiktok', label: 'TikTok', placeholder: '@username' },
+  { key: 'youtube', label: 'YouTube', placeholder: 'youtube.com/@channel' },
+  { key: 'whatsapp', label: 'WhatsApp', placeholder: '01xxxxxxxxx' },
+];
+
+function errMsg(e: unknown): string {
+  const m = (e as { message?: string } | null)?.message ?? '';
+  if (/OWNER_PROTECTED/.test(m)) return 'صاحب المحل ما ينفعش يتمسح أو يتوقف';
+  return m;
+}
 
 export function StaffPage() {
   const { i18n } = useTranslation();
@@ -220,13 +243,32 @@ export function StaffPage() {
       const row = {
         name: f.name.trim(),
         bio: f.bio.trim() || null,
+        bio_en: f.bioEn.trim() || null,
+        socials: Object.fromEntries(Object.entries(f.socials).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v)),
         experience_years: f.years.trim() ? Math.max(0, Math.round(Number(f.years))) : null,
         photo: f.photo.trim() || null,
       };
-      const res = f.id
-        ? await untypedDb.from('staff').update(row).eq('id', f.id)
-        : await untypedDb.from('staff').insert({ ...row, sort: (staffQuery.data?.length ?? 0) + 1 });
+      if (f.id) {
+        const res = await untypedDb.from('staff').update(row).eq('id', f.id);
+        if (res.error) throw res.error;
+        return;
+      }
+      const isFirst = (staffQuery.data?.length ?? 0) === 0;
+      const res = await untypedDb
+        .from('staff')
+        .insert({ ...row, sort: (staffQuery.data?.length ?? 0) + 1 })
+        .select('id')
+        .single();
       if (res.error) throw res.error;
+      // أول حلاق بيتضاف = إنت، فبيتعيّن صاحب المحل تلقائي وحجوزاتك القديمة بتتسجل عليه
+      if (isFirst && res.data?.id) {
+        const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ error: { message: string } | null }>;
+        const r = await rpcUntyped('admin_set_owner_staff', { p_staff_id: res.data.id as string });
+        if (r.error) throw r.error;
+      }
     },
     onSuccess: () => {
       toast.success(L('اتحفظ', 'Saved'));
@@ -234,7 +276,10 @@ export function StaffPage() {
       refresh();
     },
     onError: (e) =>
-      toast.error((e as Error).message === 'NAME_REQUIRED' ? L('اكتب اسم الحلاق', 'Enter the name') : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again')),
+      toast.error(
+        (e as Error).message === 'NAME_REQUIRED' ? L('اكتب اسم الحلاق', 'Enter the name') : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again'),
+        { description: (e as Error).message === 'NAME_REQUIRED' ? undefined : errMsg(e) },
+      ),
   });
 
   const makeOwner = useMutation({
@@ -252,7 +297,7 @@ export function StaffPage() {
       refresh();
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
-    onError: () => toast.error(L('حصلت مشكلة، جرّب تاني', 'Something went wrong')),
+    onError: (e) => toast.error(L('حصلت مشكلة، جرّب تاني', 'Something went wrong'), { description: errMsg(e) }),
   });
 
   const toggle = useMutation({
@@ -261,7 +306,7 @@ export function StaffPage() {
       if (error) throw error;
     },
     onSuccess: refresh,
-    onError: () => toast.error(L('حصلت مشكلة، جرّب تاني', 'Something went wrong')),
+    onError: (e) => toast.error(L('حصلت مشكلة، جرّب تاني', 'Something went wrong'), { description: errMsg(e) }),
   });
 
   const remove = useMutation({
@@ -273,7 +318,7 @@ export function StaffPage() {
       setToDelete(null);
       refresh();
     },
-    onError: () => toast.error(L('حصلت مشكلة، جرّب تاني', 'Something went wrong')),
+    onError: (e) => toast.error(L('حصلت مشكلة، جرّب تاني', 'Something went wrong'), { description: errMsg(e) }),
   });
 
   const pickFile = async (file: File | undefined) => {
@@ -292,13 +337,13 @@ export function StaffPage() {
   const activeCount = list.filter((m) => m.is_active).length;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold">{L('الطاقم', 'Team')}</h1>
           <p className="mt-1 text-sm text-ink-70">
             {L(
-              'ضيف الحلاقين هنا. العميل مش هيشوف اختيار حلاق غير لما يبقى عندك حلاقين شغالين اتنين أو أكتر.',
+              'إنت (صاحب المحل) الأساس وما ينفعش يتمسح. باقي الحلاقين تضيفهم وتوقفهم براحتك. العميل بيشوف اختيار الحلاق لما يبقى فيه حلاقين شغالين اتنين أو أكتر.',
               'Add your barbers here. Customers only get a barber choice when two or more are active.',
             )}
           </p>
@@ -322,19 +367,21 @@ export function StaffPage() {
       ) : (
         <ul className="space-y-2">
           {list.map((m) => (
-            <li key={m.id} className={cn('flex items-center gap-3 rounded-card border border-default bg-white p-3', !m.is_active && 'opacity-60')}>
+            <li key={m.id} className={cn('flex min-w-0 items-center gap-3 overflow-hidden rounded-card border border-default bg-white p-3', !m.is_active && 'opacity-60')}>
               <Avatar name={m.name} photo={m.photo} className="size-14 shrink-0 text-xl" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-espresso">
                   {m.name}
                   {m.is_owner ? <span className="ms-2 rounded-full bg-espresso px-2 py-0.5 text-[10px] font-medium text-cream">{L('صاحب المحل', 'Owner')}</span> : null}
                 </p>
-                <p className="truncate text-xs text-ink-70">
-                  {m.experience_years != null ? L(`${m.experience_years} سنة خبرة`, `${m.experience_years} yrs experience`) : null}
-                  {m.experience_years != null && m.bio ? ' · ' : null}
-                  {m.bio}
-                </p>
+                {m.experience_years != null ? (
+                  <p className="text-xs font-medium text-gold-dark">{L(`${m.experience_years} سنة خبرة`, `${m.experience_years} yrs experience`)}</p>
+                ) : null}
+                {m.bio ? (
+                  <p className="overflow-hidden break-words text-xs text-ink-70 [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box]">{m.bio}</p>
+                ) : null}
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {m.is_owner ? null : (
                 <button
                   type="button"
                   onClick={() => toggle.mutate(m)}
@@ -342,6 +389,7 @@ export function StaffPage() {
                 >
                   {m.is_active ? L('شغال', 'Active') : L('موقوف', 'Paused')}
                 </button>
+                )}
                 <button type="button" onClick={() => setScheduleFor(m)} className="rounded-full bg-sand px-2 py-0.5 text-xs font-medium text-espresso">
                   {L('جدول الشغل', 'Schedule')}
                 </button>
@@ -356,11 +404,12 @@ export function StaffPage() {
                 <button
                   type="button"
                   aria-label={L('تعديل', 'Edit')}
-                  onClick={() => setForm({ id: m.id, name: m.name, bio: m.bio ?? '', years: m.experience_years?.toString() ?? '', photo: m.photo ?? '' })}
+                  onClick={() => setForm({ id: m.id, name: m.name, bio: m.bio ?? '', bioEn: m.bio_en ?? '', socials: m.socials ?? {}, years: m.experience_years?.toString() ?? '', photo: m.photo ?? '' })}
                   className="flex size-9 items-center justify-center rounded-btn hover:bg-sand"
                 >
                   <Pencil className="size-4" aria-hidden />
                 </button>
+                {m.is_owner ? null : (
                 <button
                   type="button"
                   aria-label={L('مسح', 'Delete')}
@@ -369,6 +418,7 @@ export function StaffPage() {
                 >
                   <Trash2 className="size-4" aria-hidden />
                 </button>
+                )}
               </div>
             </li>
           ))}
@@ -387,7 +437,7 @@ export function StaffPage() {
         <div className="fixed inset-0 z-[60] flex items-end justify-center p-4 lg:items-center">
           <div className="absolute inset-0 bg-espresso/50" onClick={() => setForm(null)} />
           <div className="relative max-h-[90dvh] w-full max-w-md space-y-3 overflow-y-auto rounded-card bg-white p-4">
-            <h2 className="text-lg font-semibold">{form.id ? L('تعديل حلاق', 'Edit barber') : L('إضافة حلاق', 'Add barber')}</h2>
+            <h2 className="text-lg font-semibold">{form.id ? L('تعديل البيانات', 'Edit details') : list.length === 0 ? L('ضيف نفسك (صاحب المحل)', 'Add yourself (owner)') : L('إضافة حلاق', 'Add barber')}</h2>
             <div className="flex items-center gap-3">
               <Avatar name={form.name || '?'} photo={form.photo} className="size-16 shrink-0 text-2xl" />
               <div className="flex flex-wrap gap-2">
@@ -407,8 +457,44 @@ export function StaffPage() {
               {L('الصورة بتتصغّر لحجم خفيف جداً قبل الحفظ، فمفيش أي تكلفة تخزين. ولو مفيش صورة بيظهر أول حرف من الاسم.', 'The photo is shrunk to a tiny size before saving, so storage stays free. Without a photo, the first letter shows.')}
             </p>
             <Input label={L('الاسم', 'Name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <div className="space-y-2 rounded-btn border border-default p-3">
+              <p className="text-sm font-medium text-ink-70">{L('السوشيال ميديا (اختياري، بتظهر للعميل في صفحته)', 'Social media (optional, shown on his page)')}</p>
+              {SOCIAL_FIELDS.map((f) => (
+                <Input
+                  key={f.key}
+                  dir="ltr"
+                  label={f.label}
+                  placeholder={f.placeholder}
+                  value={form.socials[f.key] ?? ''}
+                  onChange={(e) => setForm({ ...form, socials: { ...form.socials, [f.key]: e.target.value } })}
+                />
+              ))}
+            </div>
             <Input label={L('سنين الخبرة', 'Years of experience')} type="number" min={0} inputMode="numeric" value={form.years} onChange={(e) => setForm({ ...form, years: e.target.value })} />
-            <Input label={L('نبذة قصيرة', 'Short bio')} value={form.bio} maxLength={120} onChange={(e) => setForm({ ...form, bio: e.target.value })} />
+            <div>
+              <label htmlFor="staff-bio" className="text-sm font-medium text-ink-70">{L('نبذة عنه (بتظهر للعميل، اكتب براحتك)', 'About him (shown to customers)')}</label>
+              <textarea
+                id="staff-bio"
+                rows={6}
+                maxLength={1200}
+                value={form.bio}
+                onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                className="mt-1 w-full rounded-btn border border-default bg-white px-3 py-2 text-sm"
+              />
+              <p className="mt-0.5 text-end font-latin text-[11px] text-ink-70">{form.bio.length}/1200</p>
+            </div>
+            <div>
+              <label htmlFor="staff-bio-en" className="text-sm font-medium text-ink-70">{L('النبذة بالإنجليزي (اختياري)', 'Bio in English (optional)')}</label>
+              <textarea
+                id="staff-bio-en"
+                dir="ltr"
+                rows={4}
+                maxLength={1200}
+                value={form.bioEn}
+                onChange={(e) => setForm({ ...form, bioEn: e.target.value })}
+                className="mt-1 w-full rounded-btn border border-default bg-white px-3 py-2 text-sm"
+              />
+            </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="ghost" onClick={() => setForm(null)}>{L('إلغاء', 'Cancel')}</Button>
               <Button loading={save.isPending} onClick={() => save.mutate(form)}>{L('حفظ', 'Save')}</Button>
