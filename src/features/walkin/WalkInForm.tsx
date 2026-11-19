@@ -9,15 +9,17 @@ import { supabase } from '@/lib/supabase';
 import type { Service } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { formatCairoDate, formatCairoTime, fromCairoLocal } from '@/lib/time';
+import { formatInTimeZone } from 'date-fns-tz';
+import { CAIRO_TZ, formatCairoDate, formatCairoTime, fromCairoLocal } from '@/lib/time';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { formatEGP } from '@/lib/money';
 import { mapError } from '@/lib/errors';
 
 const phoneSchema = z.string().regex(/^01[0125][0-9]{8}$/);
 
+// ساعة 24 بتوقيت القاهرة (HH:mm) — الحقل بتاع الوقت بيقبل الشكل ده بس
 function hhmmFromIso(iso: string): string {
-  return formatCairoTime(iso, 'en').slice(0, 5);
+  return formatInTimeZone(iso, CAIRO_TZ, 'HH:mm');
 }
 
 function addOneHour(hhmm: string): string {
@@ -523,7 +525,7 @@ export function WalkInForm({
                 <input
                   type="time"
                   className="min-h-11 flex-1 rounded-btn border border-bark/20 bg-white px-3 font-latin text-sm text-espresso"
-                  value={time ? formatCairoTime(time, 'en').slice(0, 5) : ''}
+                  value={time ? hhmmFromIso(time) : ''}
                   onChange={(e) => {
                     const [h, m] = e.target.value.split(':');
                     if (date && h && m) {
