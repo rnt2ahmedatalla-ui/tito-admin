@@ -272,7 +272,6 @@ function NewBookingsSection() {
   const queryClient = useQueryClient();
   const [pages, setPages] = useState(1);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [fresh, setFresh] = useState<Set<string>>(new Set());
 
   const hiddenQuery = useHiddenNotifs();
   const hidden = useMemo(() => hiddenQuery.data ?? [], [hiddenQuery.data]);
@@ -322,19 +321,6 @@ function NewBookingsSection() {
     const { error } = await supabase.rpc('admin_mark_notifications_read', { p_ids: list });
     if (!error) refresh();
   };
-
-  // أول ما تفتح التبويب: الجديد يفضل مميز، وبعد ثانية ونص يتعلّم كمقروء لوحده
-  useEffect(() => {
-    const unreadIds = items.filter((n) => !n.is_read).map((n) => n.id);
-    if (unreadIds.length === 0) return undefined;
-    setFresh((prev) => {
-      const next = new Set(prev);
-      unreadIds.forEach((id) => next.add(id));
-      return next;
-    });
-    const timer = window.setTimeout(() => void markRead(unreadIds), 1500);
-    return () => window.clearTimeout(timer);
-  }, [items]);
 
   const hideMutation = useMutation({
     mutationFn: async (toHide: string[]) => {
@@ -418,7 +404,7 @@ function NewBookingsSection() {
             const service = b
               ? isAr ? b.service_name_ar : b.service_name_en
               : localizeReason((isAr ? n.body_ar : n.body_en) ?? '', isAr);
-            const isNew = fresh.has(n.id) || !n.is_read;
+            const isNew = !n.is_read;
             return (
               <li
                 key={n.id}

@@ -34,7 +34,11 @@ type RecurringBreak = {
   is_active: boolean;
 };
 
-const HOUR_HEIGHT = 80;
+const HOUR_HEIGHT_DEFAULT = 80;
+const HOUR_MIN = 44;
+const HOUR_MAX = 200;
+const ZOOM_KEY = 'tito.calendar.hourH';
+const clampH = (n: number) => Math.min(HOUR_MAX, Math.max(HOUR_MIN, Math.round(n)));
 
 function timeToMinutes(time: string): number {
   const [h, m] = String(time).split(':').map(Number);
@@ -114,6 +118,57 @@ export function TodayPage() {
   const [pickerMonth, setPickerMonth] = useState(() => startOfMonth(new Date()));
   const [selectedBooking, setSelectedBooking] = useState<BookingWithRelations | null>(null);
   const nowLineRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [hourH, setHourH] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(ZOOM_KEY));
+      return v >= HOUR_MIN && v <= HOUR_MAX ? v : HOUR_HEIGHT_DEFAULT;
+    } catch {
+      return HOUR_HEIGHT_DEFAULT;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(ZOOM_KEY, String(hourH));
+    } catch {
+      /* ignore */
+    }
+  }, [hourH]);
+  // تكبير/تصغير بإصبعين جوه التقويم بس (من غير ما الصفحة كلها تكبر)
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return undefined;
+    let startDist = 0;
+    let startH = 0;
+    const dist = (t: TouchList) => Math.hypot((t[0]?.clientX ?? 0) - (t[1]?.clientX ?? 0), (t[0]?.clientY ?? 0) - (t[1]?.clientY ?? 0));
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        startDist = dist(e.touches);
+        startH = hourHRef.current;
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && startDist > 0) {
+        e.preventDefault();
+        setHourH(clampH((startH * dist(e.touches)) / startDist));
+      }
+    };
+    const onEnd = () => {
+      startDist = 0;
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  });
+  const hourHRef = useRef(hourH);
+  hourHRef.current = hourH;
 
   // Quick Walk-In Booking modal state
   const [walkInOpen, setWalkInOpen] = useState(false);
@@ -247,7 +302,7 @@ export function TodayPage() {
   const gridStartMinutes = gridStartHour * 60;
   const gridEndHour = hours[hours.length - 1] ?? 22;
   const gridEndMinutes = (gridEndHour + 1) * 60;
-  const totalGridHeight = hours.length * HOUR_HEIGHT;
+  const totalGridHeight = hours.length * hourH;
 
   const now = toCairo(new Date());
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -519,8 +574,32 @@ export function TodayPage() {
         <Skeleton className="h-[520px] rounded-card" />
       ) : (
         <div className="relative overflow-hidden rounded-card border border-bark/15 bg-white shadow-warm-sm">
+          <div className="absolute bottom-3 end-3 z-40 flex flex-col overflow-hidden rounded-btn border border-bark/20 bg-white/95 shadow-warm">
+            <button
+              type="button"
+              onClick={() => setHourH((h) => clampH(h * 1.25))}
+              disabled={hourH >= HOUR_MAX}
+              aria-label="Zoom in"
+              className="flex size-10 items-center justify-center text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onClick={() => setHourH((h) => clampH(h / 1.25))}
+              disabled={hourH <= HOUR_MIN}
+              aria-label="Zoom out"
+              className="flex size-10 items-center justify-center border-t border-bark/15 text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
+            >
+              −
+            </button>
+          </div>
           {/* Calendar Scroll Area */}
-          <div className="max-h-[calc(100dvh-17rem)] lg:max-h-[calc(100dvh-9rem)] min-h-[460px] overflow-x-auto overflow-y-auto">
+          <div
+            ref={scrollAreaRef}
+            style={{ touchAction: 'pan-x pan-y' }}
+            className="max-h-[calc(100dvh-17rem)] lg:max-h-[calc(100dvh-9rem)] min-h-[460px] overflow-x-auto overflow-y-auto"
+          >
             <div className="flex w-full min-w-0 lg:min-w-[340px]">
               {/* Left sticky time axis column */}
               <div className="sticky start-0 z-20 w-14 shrink-0 bg-white border-e border-bark/15 sm:w-16">
@@ -531,8 +610,8 @@ export function TodayPage() {
                   {hours.map((hour, hIdx) => (
                     <div
                       key={hour}
-                      style={{ top: hIdx * HOUR_HEIGHT }}
-                      className="absolute inset-x-0 h-20 border-b border-bark/10 pe-1.5 pt-1 text-end font-latin text-[11px] font-medium text-ink-70"
+                      style={{ top: hIdx * hourH, height: hourH }}
+                      className="absolute inset-x-0 border-b border-bark/10 pe-1.5 pt-1 text-end font-latin text-[11px] font-medium text-ink-70"
                     >
                       {hourLabel(hour)}
                     </div>
@@ -631,7 +710,7 @@ export function TodayPage() {
                         {hours.map((hour, hIdx) => (
                           <div
                             key={hour}
-                            style={{ top: hIdx * HOUR_HEIGHT }}
+                            style={{ top: hIdx * hourH, height: hourH }}
                             onClick={(e) => {
                               // مكان الضغطة جوه الساعة بيحدد الدقيقة (كل 15 دقيقة)
                               const r = e.currentTarget.getBoundingClientRect();
@@ -640,7 +719,7 @@ export function TodayPage() {
                               handleSlotClick(day, hour, minute);
                             }}
                             title={t('today.tapToBook')}
-                            className="group absolute inset-x-0 h-20 cursor-pointer border-b border-bark/10 transition-colors hover:bg-gold/10"
+                            className="group absolute inset-x-0 cursor-pointer border-b border-bark/10 transition-colors hover:bg-gold/10"
                           >
                             <span className="absolute end-1 top-1 hidden rounded bg-gold/20 p-0.5 text-gold-dark group-hover:block">
                               <Plus className="size-3" />
@@ -655,7 +734,7 @@ export function TodayPage() {
                               <div
                                 style={{
                                   top: 0,
-                                  height: `${((Math.min(openMin, gridEndMinutes) - gridStartMinutes) / 60) * HOUR_HEIGHT}px`,
+                                  height: `${((Math.min(openMin, gridEndMinutes) - gridStartMinutes) / 60) * hourH}px`,
                                 }}
                                 className="pointer-events-none absolute inset-x-0 z-[1] bg-bark/[0.10]"
                               />
@@ -663,8 +742,8 @@ export function TodayPage() {
                             {closeMin < gridEndMinutes ? (
                               <div
                                 style={{
-                                  top: `${((Math.max(closeMin, gridStartMinutes) - gridStartMinutes) / 60) * HOUR_HEIGHT}px`,
-                                  height: `${((gridEndMinutes - Math.max(closeMin, gridStartMinutes)) / 60) * HOUR_HEIGHT}px`,
+                                  top: `${((Math.max(closeMin, gridStartMinutes) - gridStartMinutes) / 60) * hourH}px`,
+                                  height: `${((gridEndMinutes - Math.max(closeMin, gridStartMinutes)) / 60) * hourH}px`,
                                 }}
                                 className="pointer-events-none absolute inset-x-0 z-[1] bg-bark/[0.10]"
                               />
@@ -685,8 +764,8 @@ export function TodayPage() {
                         {dayBreaks.map((br) => {
                           const sMin = timeToMinutes(br.start_time);
                           const eMin = timeToMinutes(br.end_time);
-                          const topPx = Math.max(0, ((sMin - gridStartMinutes) / 60) * HOUR_HEIGHT);
-                          const hPx = Math.max(20, ((eMin - sMin) / 60) * HOUR_HEIGHT);
+                          const topPx = Math.max(0, ((sMin - gridStartMinutes) / 60) * hourH);
+                          const hPx = Math.max(20, ((eMin - sMin) / 60) * hourH);
                           return (
                             <div
                               key={br.id}
@@ -719,8 +798,8 @@ export function TodayPage() {
                           });
                           const { lane, count } = layoutLanes(segs.map((x) => ({ id: x.to.id, s: x.sMin, e: Math.max(x.eMin, x.sMin + 20) })));
                           return segs.map(({ to, sMin, eMin }) => {
-                            const topPx = Math.max(0, ((sMin - gridStartMinutes) / 60) * HOUR_HEIGHT);
-                            const hPx = Math.max(22, ((eMin - sMin) / 60) * HOUR_HEIGHT);
+                            const topPx = Math.max(0, ((sMin - gridStartMinutes) / 60) * hourH);
+                            const hPx = Math.max(22, ((eMin - sMin) / 60) * hourH);
                             const laneIdx = lane.get(to.id) ?? 0;
                             return (
                               <div
@@ -743,8 +822,8 @@ export function TodayPage() {
                         {dayBookings.map((b) => {
                           const bLocal = toCairo(b.start_at);
                           const bStartMin = bLocal.getHours() * 60 + bLocal.getMinutes();
-                          const topPx = Math.max(0, ((bStartMin - gridStartMinutes) / 60) * HOUR_HEIGHT);
-                          const heightPx = Math.max(38, (b.duration_minutes / 60) * HOUR_HEIGHT - 3);
+                          const topPx = Math.max(0, ((bStartMin - gridStartMinutes) / 60) * hourH);
+                          const heightPx = Math.max(38, (b.duration_minutes / 60) * hourH - 3);
                           const style = getStatusStyle(b.status);
                           const customerName = first(b.profile)?.full_name ?? '—';
                           const serviceName = locale === 'ar' ? b.service_name_ar : b.service_name_en;
@@ -810,7 +889,7 @@ export function TodayPage() {
                         {isTodayDay && nowMinutes >= gridStartMinutes && nowMinutes <= gridEndMinutes ? (
                           <div
                             ref={nowLineRef}
-                            style={{ top: `${((nowMinutes - gridStartMinutes) / 60) * HOUR_HEIGHT}px` }}
+                            style={{ top: `${((nowMinutes - gridStartMinutes) / 60) * hourH}px` }}
                             className="pointer-events-none absolute inset-x-0 z-20 border-t-2 border-red-500"
                           >
                             <span className="absolute -top-2 start-0 size-3.5 -translate-y-1/4 rounded-full bg-red-500 shadow-xs" />
