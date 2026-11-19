@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const TAB_ROUTES = ['/', '/payments', '/reminders', '/bookings', '/more'];
+const TAB_ROUTES = ['/', '/routine', '/bookings', '/more/finance', '/more'];
 
 export function useGlobalShortcuts(onSearchFocus?: () => void, onHelp?: () => void) {
   const navigate = useNavigate();

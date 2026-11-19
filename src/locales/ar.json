@@ -55,7 +55,14 @@
     "settings": "الإعدادات",
     "customers": "العملاء",
     "walkIn": "حجز يدوي",
-    "maintenance": "الصيانة"
+    "maintenance": "الصيانة",
+    "routine": "الروتين اليومي",
+    "groupMoney": "المالية",
+    "groupCustomers": "العملاء",
+    "groupShop": "إدارة المحل",
+    "groupSystem": "النظام",
+    "routineShort": "روتين",
+    "groupQuick": "اختصارات"
   },
   "status": {
     "pending_payment": "في انتظار الدفع",

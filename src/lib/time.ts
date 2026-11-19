@@ -7,6 +7,7 @@ import {
   endOfWeek,
 } from 'date-fns';
 import { formatInTimeZone, toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { ar as arLocale } from 'date-fns/locale';
 
 export const CAIRO_TZ = 'Africa/Cairo';
 
@@ -20,7 +21,8 @@ export function fromCairoLocal(date: Date): Date {
 }
 
 export function formatCairoTime(iso: string, locale: string = 'ar'): string {
-  const pattern = locale === 'ar' ? 'h:mm a' : 'h:mm a';
+  const isAr = locale.startsWith('ar');
+  const pattern = isAr ? 'h:mm a' : 'h:mm a';
   const formatted = formatInTimeZone(iso, CAIRO_TZ, pattern);
   if (locale === 'ar') {
     return formatted.replace('AM', 'ص').replace('PM', 'م');
@@ -29,8 +31,9 @@ export function formatCairoTime(iso: string, locale: string = 'ar'): string {
 }
 
 export function formatCairoDate(iso: string, locale: string = 'ar'): string {
-  const pattern = locale === 'ar' ? 'EEEE d MMMM' : 'EEEE, MMM d';
-  return formatInTimeZone(iso, CAIRO_TZ, pattern, { locale: undefined });
+  const isAr = locale.startsWith('ar');
+  const pattern = isAr ? 'EEEE d MMMM' : 'EEEE, MMM d';
+  return formatInTimeZone(iso, CAIRO_TZ, pattern, { locale: isAr ? arLocale : undefined });
 }
 
 export function formatCairoDateShort(iso: string): string {

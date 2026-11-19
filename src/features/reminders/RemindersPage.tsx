@@ -910,10 +910,16 @@ function InactiveSection() {
   );
 }
 
-export function RemindersPage() {
+export type RemindersSectionKey = 'new' | 'reminders' | 'inactive';
+
+export function RemindersPage({
+  section: forced,
+  hideTabs = false,
+}: { section?: RemindersSectionKey; hideTabs?: boolean } = {}) {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
-  const [section, setSection] = useState<'new' | 'reminders' | 'inactive'>('new');
+  const [innerSection, setSection] = useState<RemindersSectionKey>('new');
+  const section = forced ?? innerSection;
   const unreadNew = useUnreadBookingCount().data ?? 0;
 
   const tabs = [
@@ -925,7 +931,7 @@ export function RemindersPage() {
   return (
     <div className="space-y-4">
       {/* تبويبين فوق: كل واحد بيفتح قسمه لوحده، من غير ما تنزل تحت */}
-      <div className="grid grid-cols-3 gap-2 rounded-card border border-default bg-white p-1.5">
+      <div className={cn('grid grid-cols-3 gap-2 rounded-card border border-default bg-white p-1.5', hideTabs && 'hidden')}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = section === tab.key;
