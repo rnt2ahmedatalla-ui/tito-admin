@@ -32,7 +32,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "invalidPhone": "Invalid phone number",
-    "keyboardHelp": "Keyboard shortcuts"
+    "keyboardHelp": "Keyboard shortcuts",
+    "retry": "Retry"
   },
   "nav": {
     "today": "Today",
@@ -110,7 +111,10 @@
     "todayTitle": "Today",
     "boxesTitle": "Boxes",
     "boxesHint": "Split income into boxes by percentage; the remainder is calculated automatically.",
-    "boxRemainder": "Remainder"
+    "boxRemainder": "Remainder",
+    "boxesEmpty": "No boxes yet.",
+    "boxesEditLink": "Set them up in Settings",
+    "tabHistory": "History"
   },
   "reminders": {
     "title": "Reminders",
@@ -361,7 +365,18 @@
     "confirmAr": "Confirmation template (AR)",
     "confirmEn": "Confirmation template (EN)",
     "cancelAr": "Cancellation template (AR)",
-    "cancelEn": "Cancellation template (EN)"
+    "cancelEn": "Cancellation template (EN)",
+    "financeBoxes": "Income split boxes",
+    "financeBoxesHint": "Split your income into percentage boxes (e.g. supplies, savings, development, personal profit). The rest is calculated automatically.",
+    "boxesSaved": "Boxes saved",
+    "boxesSetupNeeded": "Run the boxes SQL file in Supabase first.",
+    "boxesNone": "No boxes yet. Tap \"Add box\".",
+    "boxName": "Box name",
+    "boxPct": "Percent %",
+    "removeBox": "Remove box",
+    "addBox": "Add box",
+    "boxesSum": "Total percent",
+    "boxesOver100": "Total is over 100%, reduce it."
   },
   "walkIn": {
     "title": "Walk-in booking",

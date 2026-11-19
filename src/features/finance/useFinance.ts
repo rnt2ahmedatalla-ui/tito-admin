@@ -34,6 +34,18 @@ export type Closing = {
   diff: number;
   note: string | null;
 };
+export type Recurring = {
+  id: string;
+  name: string;
+  kind: 'expense' | 'transfer';
+  amount: number;
+  category_id: string | null;
+  wallet_id: string | null;
+  to_wallet_id: string | null;
+  day_of_month: number;
+  start_date: string;
+  is_active: boolean;
+};
 export type IncomeSummary = { online: number; cash: number; products: number; grand_total: number; bookings_count: number };
 
 export const BUCKET_LABEL: Record<Bucket, { ar: string; en: string }> = {
@@ -76,14 +88,29 @@ export function useFinData() {
     retry: false,
     staleTime: 10_000,
     queryFn: async () => {
-      const [w, c, t, s, cl] = await Promise.all([
+      // تسجيل المصروفات الثابتة المستحقة (لو الملف لسه متشغّلش مفيش مشكلة)
+      try {
+        const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (fn: string) => Promise<{ error: unknown }>;
+        await rpcUntyped('fin_apply_recurring');
+      } catch {
+        /* ignore */
+      }
+      const [w, c, t, s, cl, rc] = await Promise.all([
         untypedDb.from('fin_wallets').select('*').order('sort'),
         untypedDb.from('fin_categories').select('*').order('sort'),
         untypedDb.from('fin_transactions').select('*').order('tx_date', { ascending: false }).order('created_at', { ascending: false }).limit(5000),
         untypedDb.from('fin_settings').select('*').eq('id', 1).maybeSingle(),
         untypedDb.from('fin_closings').select('*').order('close_date', { ascending: false }).limit(60),
+        untypedDb.from('fin_recurring').select('*').order('created_at'),
       ]);
       for (const r of [w, c, t, s, cl]) if (r.error) throw r.error;
+      const recurringReady = !rc.error;
+      const recurring = ((rc.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        id: String(r.id), name: String(r.name), kind: r.kind as 'expense' | 'transfer', amount: num(r.amount),
+        category_id: (r.category_id as string | null) ?? null, wallet_id: (r.wallet_id as string | null) ?? null,
+        to_wallet_id: (r.to_wallet_id as string | null) ?? null, day_of_month: num(r.day_of_month),
+        start_date: String(r.start_date), is_active: !!r.is_active,
+      })) as Recurring[];
       const wallets = ((w.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
         id: String(r.id), name: String(r.name), kind: r.kind as WalletKind, opening_balance: num(r.opening_balance),
         is_main: !!r.is_main, is_active: !!r.is_active, sort: num(r.sort),
@@ -106,7 +133,7 @@ export function useFinData() {
         counted_cash: num(r.counted_cash), diff: num(r.diff), note: (r.note as string | null) ?? null,
       })) as Closing[];
       const income = settings ? await fetchIncome(settings.tracking_start, todayCairo()) : null;
-      return { wallets, categories, txs, settings, closings, income };
+      return { wallets, categories, txs, settings, closings, income, recurring, recurringReady };
     },
   });
 }
