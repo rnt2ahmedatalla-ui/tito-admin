@@ -35,7 +35,8 @@ type RecurringBreak = {
 };
 
 const HOUR_HEIGHT_DEFAULT = 80;
-const HOUR_MIN = 44;
+const HOUR_MIN = 52;
+const MIN_CARD_PX = 34;
 const HOUR_MAX = 200;
 const ZOOM_KEY = 'tito.calendar.hourH';
 const clampH = (n: number) => Math.min(HOUR_MAX, Math.max(HOUR_MIN, Math.round(n)));
@@ -50,25 +51,25 @@ function getStatusStyle(status: string) {
     case 'confirmed':
       return {
         stripe: 'bg-emerald-500',
-        card: 'bg-emerald-50/90 hover:bg-emerald-100/90 border-emerald-200 text-emerald-950',
+        card: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-950',
         badge: 'bg-emerald-100 text-emerald-800',
       };
     case 'pending_payment':
       return {
         stripe: 'bg-amber-500',
-        card: 'bg-amber-50/90 hover:bg-amber-100/90 border-amber-200 text-amber-950',
+        card: 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-950',
         badge: 'bg-amber-100 text-amber-800',
       };
     case 'completed':
       return {
         stripe: 'bg-sky-500',
-        card: 'bg-sky-50/90 hover:bg-sky-100/90 border-sky-200 text-sky-950',
+        card: 'bg-sky-50 hover:bg-sky-100 border-sky-200 text-sky-950',
         badge: 'bg-sky-100 text-sky-800',
       };
     case 'no_show':
       return {
         stripe: 'bg-rose-500',
-        card: 'bg-rose-50/90 hover:bg-rose-100/90 border-rose-200 text-rose-950',
+        card: 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-950',
         badge: 'bg-rose-100 text-rose-800',
       };
     default:
@@ -594,13 +595,13 @@ export function TodayPage() {
         <Skeleton className="h-[520px] rounded-card" />
       ) : (
         <div className="relative overflow-hidden rounded-card border border-bark/15 bg-white shadow-warm-sm">
-          <div className="absolute bottom-3 end-3 z-40 flex flex-col overflow-hidden rounded-btn border border-bark/20 bg-white/95 shadow-warm">
+          <div className="absolute bottom-3 end-3 z-40 flex flex-col overflow-hidden rounded-btn border border-bark/20 bg-white/90 opacity-80 shadow-warm">
             <button
               type="button"
               onClick={() => setHourH((h) => clampH(h * 1.25))}
               disabled={hourH >= HOUR_MAX}
               aria-label="Zoom in"
-              className="flex size-10 items-center justify-center text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
+              className="flex size-9 items-center justify-center text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
             >
               +
             </button>
@@ -655,7 +656,7 @@ export function TodayPage() {
                   );
                   for (const bk of sortedBk) {
                     const st = new Date(bk.start_at).getTime();
-                    const en = st + bk.duration_minutes * 60000;
+                    const en = st + Math.max(bk.duration_minutes, (MIN_CARD_PX / hourH) * 60) * 60000;
                     let lane = laneEnds.findIndex((end) => end <= st);
                     if (lane === -1) {
                       lane = laneEnds.length;
@@ -843,7 +844,7 @@ export function TodayPage() {
                           const bLocal = toCairo(b.start_at);
                           const bStartMin = bLocal.getHours() * 60 + bLocal.getMinutes();
                           const topPx = Math.max(0, ((bStartMin - gridStartMinutes) / 60) * hourH);
-                          const heightPx = Math.max(46, (b.duration_minutes / 60) * hourH - 3);
+                          const heightPx = Math.max(MIN_CARD_PX, (b.duration_minutes / 60) * hourH - 3);
                           const style = getStatusStyle(b.status);
                           const customerName = first(b.profile)?.full_name ?? '—';
                           const serviceName = locale === 'ar' ? b.service_name_ar : b.service_name_en;
@@ -869,9 +870,12 @@ export function TodayPage() {
                               {/* Colored Status Stripe on edge */}
                               <div className={cn('w-1 shrink-0', style.stripe)} />
 
-                              <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden px-2 py-1">
+                              <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden px-2 py-0.5">
                                 <div className="flex items-center gap-1.5">
                                   <p className="min-w-0 flex-1 truncate text-[13px] font-bold leading-tight">{customerName}</p>
+                                  {heightPx < 46 ? (
+                                    <span dir="ltr" className="shrink-0 font-latin text-[11px] font-semibold opacity-80">{formatCairoTime(b.start_at, locale)}</span>
+                                  ) : null}
                                   {isOnlineBooking(b) ? (
                                     <Globe className="size-3.5 shrink-0 opacity-70" aria-label={locale === 'ar' ? 'أونلاين' : 'Online'} />
                                   ) : isShopBooking(b) ? (
@@ -881,11 +885,13 @@ export function TodayPage() {
                                     <span className="size-2 shrink-0 rounded-full bg-amber-500" aria-label={locale === 'ar' ? 'مستني' : 'Pending'} />
                                   ) : null}
                                 </div>
-                                <p className="truncate text-[11px] leading-tight opacity-80">
-                                  <span dir="ltr" className="font-latin font-semibold">{formatCairoTime(b.start_at, locale)}</span>
-                                  {' · '}
-                                  {serviceName}
-                                </p>
+                                {heightPx >= 46 ? (
+                                  <p className="truncate text-[11px] leading-tight opacity-80">
+                                    <span dir="ltr" className="font-latin font-semibold">{formatCairoTime(b.start_at, locale)}</span>
+                                    {' · '}
+                                    {serviceName}
+                                  </p>
+                                ) : null}
                                 {heightPx >= 84 ? (
                                   <p className="font-latin text-[10px] opacity-60">{b.duration_minutes} {locale === 'ar' ? 'دقيقة' : 'min'}</p>
                                 ) : null}
