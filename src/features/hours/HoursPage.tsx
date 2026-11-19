@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { timeToMinutes } from '@/lib/time';
+import { minutesToTime, timeToMinutes } from '@/lib/time';
 import { mapError } from '@/lib/errors';
 
 function countSlots(open: string, close: string, lastSlot: string, stepMin: number): number {
@@ -21,10 +21,24 @@ function countSlots(open: string, close: string, lastSlot: string, stepMin: numb
   return count;
 }
 
+// آخر معاد حجز تلقائي: آخر خانة بتخلّص مع الإغلاق بالظبط، بنفس الفترة اللي في الإعدادات بين المواعيد
+function autoLast(open: string, close: string, stepMin: number): string {
+  const o = timeToMinutes(open);
+  const c = timeToMinutes(close);
+  const limit = c - stepMin;
+  if (stepMin <= 0 || limit < o) return open.slice(0, 5);
+  return minutesToTime(o + Math.floor((limit - o) / stepMin) * stepMin);
+}
+
 export function HoursPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isAr = !!i18n.language?.startsWith('ar');
+  const L = (ar: string, en: string) => (isAr ? ar : en);
   const queryClient = useQueryClient();
   const [rows, setRows] = useState<WorkingHours[]>([]);
+  // الأيام اللي آخر معاد الحجز فيها اتحدد يدوي (الباقي بيتحسب لوحده)
+  const [manualLast, setManualLast] = useState<Set<string>>(new Set());
+  const initialised = useRef(false);
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
@@ -52,6 +66,20 @@ export function HoursPage() {
   useEffect(() => {
     if (hoursQuery.data) setRows(hoursQuery.data);
   }, [hoursQuery.data]);
+
+  // أول تحميل: اليوم اللي آخر معاده مختلف عن الحساب التلقائي يتعامل كيدوي، عشان منغيّرش حاجة إنت ظابطها
+  useEffect(() => {
+    if (initialised.current || !hoursQuery.data || !settingsQuery.data) return;
+    const step = settingsQuery.data.slot_step_min ?? 30;
+    initialised.current = true;
+    setManualLast(
+      new Set(
+        hoursQuery.data
+          .filter((r) => !r.is_closed && r.last_slot_start.slice(0, 5) !== autoLast(r.open_time, r.close_time, step))
+          .map((r) => r.id),
+      ),
+    );
+  }, [hoursQuery.data, settingsQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: async (hours: WorkingHours[]) => {
@@ -86,7 +114,55 @@ export function HoursPage() {
   const stepMin = settingsQuery.data?.slot_step_min ?? 30;
 
   const updateRow = (index: number, patch: Partial<WorkingHours>) => {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== index) return r;
+        const next = { ...r, ...patch };
+        // لو غيّرت الفتح أو الإغلاق واليوم تلقائي، آخر معاد الحجز يتحدث لوحده
+        if (('open_time' in patch || 'close_time' in patch) && !manualLast.has(r.id)) {
+          next.last_slot_start = autoLast(next.open_time, next.close_time, stepMin);
+        }
+        return next;
+      }),
+    );
+  };
+
+  const setAuto = (index: number, id: string, auto: boolean) => {
+    setManualLast((prev) => {
+      const next = new Set(prev);
+      if (auto) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    if (auto) {
+      setRows((prev) =>
+        prev.map((r, i) => (i === index ? { ...r, last_slot_start: autoLast(r.open_time, r.close_time, stepMin) } : r)),
+      );
+    }
+  };
+
+  // نسخ مواعيد أول يوم لكل الأيام المفتوحة (الأيام المقفولة بتفضل مقفولة)
+  const applyToAll = () => {
+    const f = rows[0];
+    if (!f || f.is_closed) return;
+    const firstManual = manualLast.has(f.id);
+    setRows((prev) =>
+      prev.map((r, i) =>
+        i === 0 || r.is_closed
+          ? r
+          : { ...r, open_time: f.open_time, close_time: f.close_time, last_slot_start: f.last_slot_start },
+      ),
+    );
+    setManualLast((prev) => {
+      const next = new Set(prev);
+      rows.forEach((r, i) => {
+        if (i === 0 || r.is_closed) return;
+        if (firstManual) next.add(r.id);
+        else next.delete(r.id);
+      });
+      return next;
+    });
+    toast.success(L('اتطبقت على كل الأيام المفتوحة، دوس حفظ', 'Applied to all open days, press Save'));
   };
 
   if (hoursQuery.isLoading) return <Skeleton className="h-96" />;
@@ -105,6 +181,11 @@ export function HoursPage() {
               <CardBody className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{days[row.day_of_week] ?? row.day_of_week}</span>
+                  {i === 0 && !row.is_closed ? (
+                    <Button variant="secondary" size="sm" onClick={applyToAll}>
+                      {L('طبّق على كل الأيام', 'Apply to all days')}
+                    </Button>
+                  ) : null}
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -133,9 +214,22 @@ export function HoursPage() {
                         label={t('hours.lastSlot')}
                         type="time"
                         value={row.last_slot_start.slice(0, 5)}
+                        disabled={!manualLast.has(row.id)}
                         onChange={(e) => updateRow(i, { last_slot_start: e.target.value })}
                       />
                     </div>
+                    <label className="flex items-center gap-2 text-xs text-ink-70">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-gold"
+                        checked={!manualLast.has(row.id)}
+                        onChange={(e) => setAuto(i, row.id, e.target.checked)}
+                      />
+                      {L(
+                        `آخر معاد حجز تلقائي (إغلاق − ${stepMin} دقيقة)`,
+                        `Auto last booking time (closing − ${stepMin} min)`,
+                      )}
+                    </label>
                     <p className="text-sm text-ink-70">
                       {t('hours.preview', { count: slotCount })}
                     </p>
