@@ -18,12 +18,13 @@ import { usePaymentsCount } from '@/hooks/usePaymentsCount';
 import { setLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 import { useState } from 'react';
+import { useUnreadBookingCount } from '@/hooks/useBookingLog';
 import { useGlobalShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const mainTabs = [
   { to: '/', icon: Calendar, labelKey: 'nav.today' },
-  { to: '/payments', icon: CreditCard, labelKey: 'nav.payments', badge: true },
-  { to: '/reminders', icon: Bell, labelKey: 'nav.reminders' },
+  { to: '/payments', icon: CreditCard, labelKey: 'nav.payments', badge: 'payments' as const },
+  { to: '/reminders', icon: Bell, labelKey: 'nav.reminders', badge: 'reminders' as const },
   { to: '/bookings', icon: List, labelKey: 'nav.bookings', mobileHidden: true },
   { to: '/more', icon: MoreHorizontal, labelKey: 'nav.more' },
 ];
@@ -69,6 +70,8 @@ export function AppShell() {
   const { t, i18n } = useTranslation();
   const { signOut } = useAuth();
   const { data: paymentsCount = 0 } = usePaymentsCount();
+  const { data: remindersCount = 0 } = useUnreadBookingCount();
+  const badgeFor = (b?: 'payments' | 'reminders') => (b === 'payments' ? paymentsCount : b === 'reminders' ? remindersCount : 0);
   const location = useLocation();
   const [showHelp, setShowHelp] = useState(false);
 
@@ -113,7 +116,7 @@ export function AppShell() {
               >
                 {Icon ? <Icon className="size-5 shrink-0" /> : null}
                 <span className="flex-1">{t(link.labelKey)}</span>
-                {showBadge ? <CountBadge count={paymentsCount} /> : null}
+                {showBadge ? <CountBadge count={badgeFor(link.badge)} /> : null}
               </NavLink>
             );
           })}
@@ -185,7 +188,7 @@ export function AppShell() {
                   <Icon className="size-5" />
                   {tab.badge ? (
                     <span className="absolute -top-1 -end-2">
-                      <CountBadge count={paymentsCount} />
+                      <CountBadge count={badgeFor(tab.badge)} />
                     </span>
                   ) : null}
                 </span>
