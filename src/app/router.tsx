@@ -10,6 +10,7 @@ const BookingsPage = lazy(() => import('@/features/bookings/BookingsPage').then(
 const MorePage = lazy(() => import('@/features/more/MorePage').then((m) => ({ default: m.MorePage })));
 const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const StaffPage = lazy(() => import('@/features/staff/StaffPage').then((m) => ({ default: m.StaffPage })));
+const FinancePage = lazy(() => import('@/features/finance/FinancePage').then((m) => ({ default: m.FinancePage })));
 const LoyaltyPage = lazy(() => import('@/features/loyalty/LoyaltyPage').then((m) => ({ default: m.LoyaltyPage })));
 const CouponsPage = lazy(() => import('@/features/coupons/CouponsPage').then((m) => ({ default: m.CouponsPage })));
 const ServicesPage = lazy(() => import('@/features/services/ServicesPage').then((m) => ({ default: m.ServicesPage })));
@@ -54,6 +55,7 @@ export function AppRouter() {
           <Route path="more/maintenance" element={<Suspense fallback={<PageLoader />}><MaintenancePage /></Suspense>} />
           <Route path="more/reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
           <Route path="more/staff" element={<Suspense fallback={<PageLoader />}><StaffPage /></Suspense>} />
+          <Route path="more/finance" element={<Suspense fallback={<PageLoader />}><FinancePage /></Suspense>} />
           <Route path="more/loyalty" element={<Suspense fallback={<PageLoader />}><LoyaltyPage /></Suspense>} />
           <Route path="more/coupons" element={<Suspense fallback={<PageLoader />}><CouponsPage /></Suspense>} />
           <Route path="*" element={<Navigate to="/" replace />} />
