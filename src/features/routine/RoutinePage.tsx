@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useWaitlistCount } from '@/features/extras/useWaitlistCount';
 import { Bell, CreditCard, MessageCircle, Users, Hourglass } from 'lucide-react';
 import { useFeatureFlags } from '@/features/extras/useFeatures';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -24,6 +25,7 @@ export function RoutinePage() {
   const newCount = useUnreadBookingCount().data ?? 0;
 
   const waitlistOn = !!useFeatureFlags().data?.waitlist;
+  const waitCount = useWaitlistCount().data ?? 0;
   const asked = params.get('t') as Key | null;
   const active: Key = asked && (asked !== 'waitlist' || waitlistOn) && ['payments', 'new', 'reminders', 'inactive', 'waitlist'].includes(asked) ? asked : payCount > 0 ? 'payments' : newCount > 0 ? 'new' : 'reminders';
 
@@ -32,7 +34,7 @@ export function RoutinePage() {
     { key: 'new', label: L('الجديدة', 'New'), icon: Bell, badge: newCount },
     { key: 'reminders', label: L('التذكيرات', 'Reminders'), icon: MessageCircle, badge: 0 },
     { key: 'inactive', label: L('الغايبين', 'Inactive'), icon: Users, badge: 0 },
-    ...(waitlistOn ? [{ key: 'waitlist' as Key, label: L('الانتظار', 'Waitlist'), icon: Hourglass, badge: 0 }] : []),
+    ...(waitlistOn ? [{ key: 'waitlist' as Key, label: L('الانتظار', 'Waitlist'), icon: Hourglass, badge: waitCount }] : []),
   ];
 
   return (

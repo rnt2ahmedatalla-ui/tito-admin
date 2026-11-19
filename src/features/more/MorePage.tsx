@@ -4,6 +4,7 @@ import { Globe, LogOut } from 'lucide-react';
 import { navGroups } from '@/components/layout/navConfig';
 import { CountBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useWaitlistCount } from '@/features/extras/useWaitlistCount';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
 import { useUnreadBookingCount } from '@/hooks/useBookingLog';
 import { setLanguage } from '@/lib/i18n';
@@ -12,9 +13,9 @@ import { cn } from '@/lib/cn';
 export function MorePage() {
   const { t, i18n } = useTranslation();
   const { signOut } = useAuth();
-  const routineCount = (usePaymentsCount().data ?? 0) + (useUnreadBookingCount().data ?? 0);
+  const routineCount = (usePaymentsCount().data ?? 0) + (useUnreadBookingCount().data ?? 0) + (useWaitlistCount().data ?? 0);
   // الأساسيات (اليوم/الروتين/الحجوزات/المالية) موجودة في الشريط تحت، فمش بنكررها هنا
-  const hidden = new Set(['/', '/routine', '/bookings', '/more/finance']);
+  const hidden = new Set(['/', '/routine', '/more/finance', '/more/customers']);
 
   return (
     <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-clip">
