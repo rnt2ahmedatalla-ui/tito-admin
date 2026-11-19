@@ -15,6 +15,7 @@ import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { formatEGP } from '@/lib/money';
 import { mapError } from '@/lib/errors';
 import { useStaff } from '@/features/staff/StaffPage';
+import { untypedDb } from '@/features/payments/useFinanceBoxes';
 
 const phoneSchema = z.string().regex(/^01[0125][0-9]{8}$/);
 
@@ -113,7 +114,24 @@ export function WalkInForm({
     staleTime: 60_000,
   });
 
-  const { data: extras = [] } = useQuery({
+  // استثناءات الحلاقين: خدمات مش بيقدمها وأسعار مختلفة
+  const { data: staffSvc = [] } = useQuery({
+    queryKey: ['staff-services-all'],
+    queryFn: async () => {
+      const { data, error } = await untypedDb.from('staff_services').select('staff_id, service_id, is_offered, price_egp');
+      if (error) return [];
+      return (data ?? []) as Array<{ staff_id: string; service_id: string; is_offered: boolean; price_egp: number | string | null }>;
+    },
+    staleTime: 60_000,
+  });
+  const offeredBy = (sid: string, svcId: string) =>
+    !sid || !staffSvc.some((r) => r.staff_id === sid && r.service_id === svcId && r.is_offered === false);
+  const priceFor = (svc: Service) => {
+    const o = staffId ? staffSvc.find((r) => r.staff_id === staffId && r.service_id === svc.id && r.price_egp != null) : undefined;
+    return Number(o?.price_egp ?? svc.price_egp);
+  };
+
+  const { data: extrasAll = [] } = useQuery({
     queryKey: ['services', 'extras-active'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -127,6 +145,8 @@ export function WalkInForm({
     },
     staleTime: 60_000,
   });
+  const extras = extrasAll.filter((x) => offeredBy(staffId, x.id));
+  const servicesAll = services;
 
   const { data: found = [], isFetching: searching } = useQuery({
     queryKey: ['walkin-customers', debouncedQ],
@@ -259,7 +279,7 @@ export function WalkInForm({
         const when = startAt ? `${formatCairoDate(startAt, locale)} · ${formatCairoTime(startAt, locale)}` : '';
         const picked = extras.filter((x) => extraIds.includes(x.id));
         const extrasText = picked.map((x) => (isAr ? x.name_ar : x.name_en)).join(' + ');
-        const totalPrice = Number(svc?.price_egp ?? 0) + picked.reduce((sum, x) => sum + Number(x.price_egp), 0);
+        const totalPrice = (svc ? priceFor(svc) : 0) + picked.reduce((sum, x) => sum + priceFor(x), 0);
         const price = svc ? formatEGP(totalPrice) : '';
         const message = isAr
           ? `أهلاً ${name.trim()} 👋\nحجزنا لك في ${shop}:\n• الخدمة: ${svcName}${extrasText ? ` + ${extrasText}` : ''}\n• الموعد: ${when}\n• السعر: ${price}\n${paidCash ? '• الدفع: اتدفع كاش ✅' : '• الدفع: في المحل لما تيجي'}\nمستنيينك 💈`
@@ -457,9 +477,9 @@ export function WalkInForm({
               }}
             >
               <option value="">— {isAr ? 'اختر' : 'Select'} —</option>
-              {services.map((s) => (
+              {servicesAll.filter((s) => offeredBy(staffId, s.id) || s.id === serviceId).map((s) => (
                 <option key={s.id} value={s.id}>
-                  {locale === 'ar' ? s.name_ar : s.name_en} ({s.price_egp} EGP)
+                  {locale === 'ar' ? s.name_ar : s.name_en} ({priceFor(s)} EGP)
                 </option>
               ))}
             </select>
@@ -471,7 +491,16 @@ export function WalkInForm({
               <select
                 id="walkin-staff"
                 value={staffId}
-                onChange={(e) => setStaffId(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setStaffId(v);
+                  // نشيل الخدمة/الإضافات اللي الحلاق ده مش بيقدمها
+                  if (serviceId && !offeredBy(v, serviceId)) {
+                    setServiceId('');
+                    setSlots([]);
+                  }
+                  setExtraIds((prev) => prev.filter((i) => offeredBy(v, i)));
+                }}
                 className="mt-1 min-h-11 w-full rounded-btn border border-default bg-white px-3 text-sm"
               >
                 <option value="">{isAr ? 'من غير تحديد' : 'Unassigned'}</option>
@@ -507,7 +536,7 @@ export function WalkInForm({
                         {on ? <Check className="size-3" strokeWidth={3} /> : null}
                       </span>
                       <span className="min-w-0 flex-1 break-words text-espresso">{isAr ? x.name_ar : x.name_en}</span>
-                      <span className="shrink-0 font-latin text-xs font-semibold text-bark">+{formatEGP(Number(x.price_egp))}</span>
+                      <span className="shrink-0 font-latin text-xs font-semibold text-bark">+{formatEGP(priceFor(x))}</span>
                     </button>
                   );
                 })}
@@ -517,8 +546,8 @@ export function WalkInForm({
                   {isAr ? 'الإجمالي: ' : 'Total: '}
                   <span className="font-latin">
                     {formatEGP(
-                      Number(services.find((x) => x.id === serviceId)?.price_egp ?? 0) +
-                        extras.filter((x) => extraIds.includes(x.id)).reduce((sum, x) => sum + Number(x.price_egp), 0),
+                      (() => { const sv = services.find((x) => x.id === serviceId); return sv ? priceFor(sv) : 0; })() +
+                        extras.filter((x) => extraIds.includes(x.id)).reduce((sum, x) => sum + priceFor(x), 0),
                     )}
                   </span>
                 </p>
