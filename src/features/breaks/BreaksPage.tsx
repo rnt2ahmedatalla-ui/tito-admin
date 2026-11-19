@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
 
 type RecurringBreak = {
@@ -23,8 +24,11 @@ const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 export function BreaksPage() {
   const { t, i18n } = useTranslation();
+  const isAr = !!i18n.language?.startsWith('ar');
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({
     reason: '',
     start_time: '14:30',
@@ -46,20 +50,39 @@ export function BreaksPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from('recurring_breaks').insert({
+      const payload = {
         reason: form.reason || t('breaks.defaultReason'),
         start_time: form.start_time.length === 5 ? `${form.start_time}:00` : form.start_time,
         end_time: form.end_time.length === 5 ? `${form.end_time}:00` : form.end_time,
         days_of_week: form.days_of_week,
-        is_active: true,
-      });
+      };
+      if (form.start_time >= form.end_time) throw new Error('INVALID_RANGE');
+      const { error } = editingId
+        ? await supabase.from('recurring_breaks').update(payload).eq('id', editingId)
+        : await supabase.from('recurring_breaks').insert({ ...payload, is_active: true });
       if (error) throw error;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['recurring-breaks'] });
       setShowForm(false);
+      setEditingId(null);
       toast.success(t('app.save'));
     },
+    onError: (e) => {
+      if (e instanceof Error && e.message === 'INVALID_RANGE') {
+        toast.error(isAr ? 'وقت النهاية لازم يبقى بعد البداية' : 'End time must be after start time');
+        return;
+      }
+      toast.error(mapError(e, t));
+    },
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { error } = await supabase.from('recurring_breaks').update({ is_active: active }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['recurring-breaks'] }),
     onError: (e) => toast.error(mapError(e, t)),
   });
 
@@ -68,9 +91,30 @@ export function BreaksPage() {
       const { error } = await supabase.from('recurring_breaks').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['recurring-breaks'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['recurring-breaks'] });
+      setDeleteId(null);
+    },
     onError: (e) => toast.error(mapError(e, t)),
   });
+
+  const startEdit = (b: RecurringBreak) => {
+    setEditingId(b.id);
+    setForm({
+      reason: b.reason ?? '',
+      start_time: String(b.start_time).slice(0, 5),
+      end_time: String(b.end_time).slice(0, 5),
+      days_of_week: b.days_of_week,
+    });
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const startAdd = () => {
+    setEditingId(null);
+    setForm({ reason: '', start_time: '14:30', end_time: '15:30', days_of_week: ALL_DAYS });
+    setShowForm(true);
+  };
 
   const toggleDay = (d: number) => {
     setForm((prev) => {
@@ -91,7 +135,7 @@ export function BreaksPage() {
           <h1 className="text-2xl font-semibold">{t('breaks.title')}</h1>
           <p className="text-sm text-ink-70">{t('breaks.hint')}</p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => setShowForm(true)}>
+        <Button variant="primary" size="sm" onClick={startAdd}>
           <Plus className="size-4" />
           {t('breaks.add')}
         </Button>
@@ -141,7 +185,7 @@ export function BreaksPage() {
               <Button variant="primary" loading={saveMutation.isPending} onClick={() => void saveMutation.mutate()}>
                 {t('app.save')}
               </Button>
-              <Button variant="ghost" onClick={() => setShowForm(false)}>{t('app.cancel')}</Button>
+              <Button variant="ghost" onClick={() => { setShowForm(false); setEditingId(null); }}>{t('app.cancel')}</Button>
             </div>
           </CardBody>
         </Card>
@@ -155,7 +199,7 @@ export function BreaksPage() {
         <div className="space-y-2">
           {breaks.map((b) => (
             <Card key={b.id}>
-              <CardBody className="flex items-center gap-3 p-3">
+              <CardBody className={`flex items-center gap-2 p-3 ${b.is_active ? '' : 'opacity-60'}`}>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{b.reason || t('breaks.defaultReason')}</p>
                   <p className="font-latin text-sm text-ink-70">
@@ -166,14 +210,36 @@ export function BreaksPage() {
                       : b.days_of_week.map(dowLabel).join(i18n.language === 'ar' ? '، ' : ', ')}
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => void deleteMutation.mutate(b.id)}>
-                  <Trash2 className="size-4" />
+                <label className="flex shrink-0 items-center gap-1.5 text-xs text-ink-70">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-gold"
+                    checked={b.is_active}
+                    onChange={(e) => toggleActive.mutate({ id: b.id, active: e.target.checked })}
+                  />
+                  {isAr ? 'شغّال' : 'On'}
+                </label>
+                <Button variant="ghost" size="sm" onClick={() => startEdit(b)} aria-label={isAr ? 'تعديل' : 'Edit'}>
+                  <Pencil className="size-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setDeleteId(b.id)} aria-label={isAr ? 'مسح' : 'Delete'}>
+                  <Trash2 className="size-4 text-danger" />
                 </Button>
               </CardBody>
             </Card>
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteId}
+        title={isAr ? 'تمسح الاستراحة دي؟' : 'Delete this break?'}
+        message={isAr ? 'المواعيد دي هترجع متاحة للحجز.' : 'These times will become available for booking again.'}
+        variant="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }

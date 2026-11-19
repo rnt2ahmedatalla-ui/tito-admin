@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import type { TimeOff, BookingWithRelations } from '@/types/database';
@@ -9,7 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { formatCairoDateShort, formatCairoTime, fromCairoLocal } from '@/lib/time';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { formatCairoDateShort, formatCairoTime, fromCairoLocal, toCairo } from '@/lib/time';
 import { buildWhatsAppUrl } from '@/lib/whatsapp';
 import { mapError } from '@/lib/errors';
 import { first } from '@/lib/booking';
@@ -28,7 +30,10 @@ function cairoBoundsForYmd(ymd: string): { start: string; end: string } {
 export function TimeOffPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const isAr = !!i18n.language?.startsWith('ar');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({
     all_day: false,
     start_date: '',
@@ -102,18 +107,22 @@ export function TimeOffPage() {
       const range = resolveRange();
       const count = await checkOverlap();
       if (count > 0 && !acknowledged) throw new Error('OVERLAP');
-      const { error } = await supabase.from('time_off').insert({
+      const payload = {
         start_at: range.start_at,
         end_at: range.end_at,
         reason: form.reason,
         all_day: range.all_day,
-      });
+      };
+      const { error } = editingId
+        ? await supabase.from('time_off').update(payload).eq('id', editingId)
+        : await supabase.from('time_off').insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['time-off'] });
       void queryClient.invalidateQueries({ queryKey: ['bookings', 'today'] });
       setShowForm(false);
+      setEditingId(null);
       setForm({ all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '' });
       setOverlapBookings([]);
       setAcknowledged(false);
@@ -134,9 +143,41 @@ export function TimeOffPage() {
       const { error } = await supabase.from('time_off').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['time-off'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['time-off'] });
+      void queryClient.invalidateQueries({ queryKey: ['bookings', 'today'] });
+      setDeleteId(null);
+    },
     onError: (e) => toast.error(mapError(e, t)),
   });
+
+  const emptyForm = { all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '' };
+
+  const startAdd = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setOverlapBookings([]);
+    setAcknowledged(false);
+    setShowForm(true);
+  };
+
+  const startEdit = (row: TimeOff) => {
+    const s = toCairo(row.start_at);
+    const e = toCairo(row.end_at);
+    setEditingId(row.id);
+    setForm({
+      all_day: row.all_day,
+      start_date: format(s, 'yyyy-MM-dd'),
+      end_date: format(e, 'yyyy-MM-dd'),
+      start_at: format(s, "yyyy-MM-dd'T'HH:mm"),
+      end_at: format(e, "yyyy-MM-dd'T'HH:mm"),
+      reason: row.reason ?? '',
+    });
+    setOverlapBookings([]);
+    setAcknowledged(false);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const cancelAffected = async () => {
     for (const b of overlapBookings) {
@@ -157,7 +198,7 @@ export function TimeOffPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">{t('timeOff.title')}</h1>
-        <Button variant="primary" size="sm" onClick={() => setShowForm(true)}>
+        <Button variant="primary" size="sm" onClick={startAdd}>
           <Plus className="size-4" />
           {t('timeOff.add')}
         </Button>
@@ -249,7 +290,7 @@ export function TimeOffPage() {
               >
                 {t('app.save')}
               </Button>
-              <Button variant="ghost" onClick={() => setShowForm(false)}>
+              <Button variant="ghost" onClick={() => { setShowForm(false); setEditingId(null); }}>
                 {t('app.cancel')}
               </Button>
             </div>
@@ -281,14 +322,29 @@ export function TimeOffPage() {
                     ) : null}
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => void deleteMutation.mutate(to.id)}>
-                  <Trash2 className="size-4 text-danger" />
-                </Button>
+                <div className="flex shrink-0 items-center">
+                  <Button variant="ghost" size="sm" onClick={() => startEdit(to)} aria-label={isAr ? 'تعديل' : 'Edit'}>
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteId(to.id)} aria-label={isAr ? 'مسح' : 'Delete'}>
+                    <Trash2 className="size-4 text-danger" />
+                  </Button>
+                </div>
               </CardBody>
             </Card>
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteId}
+        title={isAr ? 'تمسح الإجازة دي؟' : 'Delete this time off?'}
+        message={isAr ? 'المواعيد دي هترجع متاحة للحجز.' : 'These times will become available for booking again.'}
+        variant="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }
