@@ -22,7 +22,6 @@ export function StaffAccessCard() {
   const L = (ar: string, en: string) => (isAr ? ar : en);
   const qc = useQueryClient();
   const staff = (useStaff().data ?? []).filter((m) => !m.is_owner);
-  const [emails, setEmails] = useState<Record<string, string>>({});
 
   const linked = useQuery({
     queryKey: ['staff-emails'],
@@ -36,19 +35,28 @@ export function StaffAccessCard() {
     },
   });
 
-  const link = useMutation({
-    mutationFn: async (v: { id: string; email: string }) => {
-      const { data, error } = await rpc('admin_link_staff_user', { p_staff: v.id, p_email: v.email });
+  const [users, setUsers] = useState<Record<string, string>>({});
+  const [pwds, setPwds] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: async (v: { id: string; username: string; password: string }) => {
+      const { error } = await rpc('admin_set_staff_login', { p_staff: v.id, p_username: v.username, p_password: v.password });
       if (error) throw new Error(error.message);
-      if (!data) throw new Error('NO_USER');
     },
-    onSuccess: () => {
-      toast.success(L('اتربط الحساب. الحلاق يقدر يدخل دلوقتي.', 'Account linked. The barber can sign in now.'));
+    onSuccess: (_d, v) => {
+      toast.success(L('اتحفظ. اديله اسم المستخدم والباسورد.', 'Saved. Give him the username and password.'));
+      setPwds((p) => ({ ...p, [v.id]: '' }));
+      setEditing(null);
       void qc.invalidateQueries({ queryKey: ['staff-emails'] });
     },
     onError: (e) => {
       const m = (e as Error).message;
-      toast.error(m.includes('NO_USER') ? L('مفيش حساب بالإيميل ده. اعمله من Supabase الأول (الشرح تحت).', 'No account with that email. Create it in Supabase first.') : m.includes('IS_ADMIN') ? L('الإيميل ده حساب أدمن.', 'That email is an admin account.') : mapError(e, t));
+      toast.error(
+        m.includes('BAD_USERNAME') ? L('اسم المستخدم لازم 3 حروف أو أرقام إنجليزي على الأقل.', 'Username needs at least 3 letters/numbers.')
+        : m.includes('BAD_PASSWORD') ? L('الباسورد لازم 6 حروف على الأقل.', 'Password needs at least 6 characters.')
+        : m.includes('USERNAME_TAKEN') ? L('اسم المستخدم ده مستخدم، اختار غيره.', 'Username already taken.')
+        : mapError(e, t),
+      );
     },
   });
   const unlink = useMutation({
@@ -70,45 +78,51 @@ export function StaffAccessCard() {
         </div>
         <p className="text-sm text-ink-70">
           {L(
-            'الحلاق اللي تربطه بحساب بيدخل نفس لوحة الأدمن بس يشوف جدول حجوزاته بس: من غير مالية ولا أسعار ولا أرقام عملاء ولا أي إعدادات.',
+            'إنت اللي بتحدد اسم المستخدم والباسورد لكل حلاق من هنا. الحلاق بيشوف جدول حجوزاته بس: من غير مالية ولا أسعار ولا أرقام عملاء ولا أي إعدادات.',
             'A linked barber sees only his own schedule: no finance, prices, phone numbers or settings.',
           )}
         </p>
-        <ol className="list-decimal space-y-1 ps-5 text-xs text-ink-70">
-          <li>{L('افتح Supabase ← Authentication ← Users ← Add user.', 'Supabase → Authentication → Users → Add user.')}</li>
-          <li>{L('اكتب إيميل وباسورد للحلاق وفعّل "Auto Confirm User".', 'Enter his email and a password, enable "Auto Confirm User".')}</li>
-          <li>{L('اكتب نفس الإيميل هنا واضغط ربط، وادّي الحلاق الإيميل والباسورد.', 'Enter the same email here and tap Link, then give him the credentials.')}</li>
-        </ol>
         {staff.map((m) => {
           const email = linked.data?.[m.id];
           return (
             <div key={m.id} className="space-y-2 rounded-btn border border-default p-3">
               <p className="font-semibold text-espresso">{m.name}</p>
-              {email ? (
+              {email && editing !== m.id ? (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="min-w-0 truncate font-latin text-sm text-ink-70" dir="ltr">{email}</span>
-                  <Button size="sm" variant="ghost" className="text-danger" loading={unlink.isPending} onClick={() => unlink.mutate(m.id)}>
-                    {L('فك الربط', 'Unlink')}
-                  </Button>
+                  <span className="min-w-0 truncate font-latin text-sm text-ink-70" dir="ltr">
+                    {L('اسم المستخدم: ', 'Username: ')}{email.split('@')[0]}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="secondary" onClick={() => { setEditing(m.id); setUsers((p) => ({ ...p, [m.id]: email.split('@')[0] ?? '' })); }}>
+                      {L('تغيير الاسم/الباسورد', 'Change login')}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-danger" loading={unlink.isPending} onClick={() => unlink.mutate(m.id)}>
+                      {L('إيقاف الدخول', 'Disable')}
+                    </Button>
+                  </div>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                  <div className="min-w-0 flex-1">
-                    <Input
-                      label={L('إيميل الحلاق', 'Barber email')}
-                      dir="ltr"
-                      inputMode="email"
-                      value={emails[m.id] ?? ''}
-                      onChange={(e) => setEmails((p) => ({ ...p, [m.id]: e.target.value }))}
-                    />
-                  </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <Input
+                    label={L('اسم المستخدم', 'Username')}
+                    dir="ltr"
+                    autoCapitalize="none"
+                    value={users[m.id] ?? ''}
+                    onChange={(e) => setUsers((p) => ({ ...p, [m.id]: e.target.value }))}
+                  />
+                  <Input
+                    label={L('الباسورد', 'Password')}
+                    dir="ltr"
+                    value={pwds[m.id] ?? ''}
+                    onChange={(e) => setPwds((p) => ({ ...p, [m.id]: e.target.value }))}
+                  />
                   <Button
                     variant="primary"
-                    loading={link.isPending}
-                    disabled={!(emails[m.id] ?? '').includes('@')}
-                    onClick={() => link.mutate({ id: m.id, email: emails[m.id] ?? '' })}
+                    loading={save.isPending}
+                    disabled={(users[m.id] ?? '').trim().length < 3 || (pwds[m.id] ?? '').length < 6}
+                    onClick={() => save.mutate({ id: m.id, username: users[m.id] ?? '', password: pwds[m.id] ?? '' })}
                   >
-                    {L('ربط', 'Link')}
+                    {L('حفظ', 'Save')}
                   </Button>
                 </div>
               )}
