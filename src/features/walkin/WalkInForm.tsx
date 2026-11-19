@@ -56,6 +56,7 @@ export function WalkInForm({
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [serviceId, setServiceId] = useState('');
+  const [extraIds, setExtraIds] = useState<string[]>([]);
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
   const [paidCash, setPaidCash] = useState(true);
@@ -98,6 +99,21 @@ export function WalkInForm({
         .select('*')
         .eq('is_active', true)
         .eq('is_extra', false)
+        .order('sort_order');
+      if (error) throw error;
+      return data as Service[];
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: extras = [] } = useQuery({
+    queryKey: ['services', 'extras-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true)
+        .eq('is_extra', true)
         .order('sort_order');
       if (error) throw error;
       return data as Service[];
@@ -161,6 +177,7 @@ export function WalkInForm({
     setName('');
     setPhone('');
     setServiceId('');
+    setExtraIds([]);
     setDate('');
     setTime('');
     setPaidCash(true);
@@ -198,30 +215,27 @@ export function WalkInForm({
       const startAt = time || slots[0];
       if (!startAt) throw new Error('NO_SLOT');
 
-      if (force) {
-        // الدالة الجديدة مش موجودة في أنواع المشروع الحالية، فبنعدّي النوع يدوياً
-        const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (
-          fn: string,
-          args: Record<string, unknown>,
-        ) => Promise<{ error: { message: string } | null }>;
-        const { error } = await rpcUntyped('admin_create_booking_force', {
-          p_name: name.trim(),
-          p_phone: phone.trim(),
-          p_service_id: serviceId,
-          p_start_at: startAt,
-          p_paid_cash: paidCash,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.rpc('admin_create_booking', {
-          p_name: name.trim(),
-          p_phone: phone.trim(),
-          p_service_id: serviceId,
-          p_start_at: startAt,
-          p_paid_cash: paidCash,
-        });
-        if (error) throw error;
-      }
+      // الدالة الجديدة بتدعم الإضافات وبتبعت إشعار للعميل. لو لسه ما اتعملتش في قاعدة البيانات بنرجع للقديمة.
+      const rpcUntyped = supabase.rpc.bind(supabase) as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ error: { message: string } | null }>;
+      const base = {
+        p_name: name.trim(),
+        p_phone: phone.trim(),
+        p_service_id: serviceId,
+        p_start_at: startAt,
+        p_paid_cash: paidCash,
+      };
+      const ex = await rpcUntyped('admin_create_booking_ex', { ...base, p_extra_ids: extraIds, p_force: force });
+      if (!ex.error) return;
+      const missing = /admin_create_booking_ex|PGRST202|Could not find the function/i.test(ex.error.message);
+      if (!missing) throw ex.error;
+      if (extraIds.length > 0) throw new Error('EXTRAS_SQL_MISSING');
+      const legacy = force
+        ? await rpcUntyped('admin_create_booking_force', base)
+        : await supabase.rpc('admin_create_booking', base);
+      if (legacy.error) throw legacy.error;
     },
     onSuccess: async () => {
       toast.success(mode === 'event' ? (isAr ? 'تم حفظ الوقت المقفول' : 'Blocked time saved') : t('walkIn.create'));
@@ -236,10 +250,13 @@ export function WalkInForm({
         const shop = (st as { shop_name?: string | null } | null)?.shop_name || 'tito';
         const svcName = svc ? (isAr ? svc.name_ar : svc.name_en) : '';
         const when = startAt ? `${formatCairoDate(startAt, locale)} · ${formatCairoTime(startAt, locale)}` : '';
-        const price = svc ? formatEGP(Number(svc.price_egp)) : '';
+        const picked = extras.filter((x) => extraIds.includes(x.id));
+        const extrasText = picked.map((x) => (isAr ? x.name_ar : x.name_en)).join(' + ');
+        const totalPrice = Number(svc?.price_egp ?? 0) + picked.reduce((sum, x) => sum + Number(x.price_egp), 0);
+        const price = svc ? formatEGP(totalPrice) : '';
         const message = isAr
-          ? `أهلاً ${name.trim()} 👋\nحجزنا لك في ${shop}:\n• الخدمة: ${svcName}\n• الموعد: ${when}\n• السعر: ${price}\n${paidCash ? '• الدفع: اتدفع كاش ✅' : '• الدفع: في المحل لما تيجي'}\nمستنيينك 💈`
-          : `Hi ${name.trim()} 👋\nYour booking at ${shop}:\n• Service: ${svcName}\n• When: ${when}\n• Price: ${price}\n${paidCash ? '• Payment: paid in cash ✅' : '• Payment: at the shop'}\nSee you soon 💈`;
+          ? `أهلاً ${name.trim()} 👋\nحجزنا لك في ${shop}:\n• الخدمة: ${svcName}${extrasText ? ` + ${extrasText}` : ''}\n• الموعد: ${when}\n• السعر: ${price}\n${paidCash ? '• الدفع: اتدفع كاش ✅' : '• الدفع: في المحل لما تيجي'}\nمستنيينك 💈`
+          : `Hi ${name.trim()} 👋\nYour booking at ${shop}:\n• Service: ${svcName}${extrasText ? ` + ${extrasText}` : ''}\n• When: ${when}\n• Price: ${price}\n${paidCash ? '• Payment: paid in cash ✅' : '• Payment: at the shop'}\nSee you soon 💈`;
         setDone({ phone: phone.trim(), message });
         return;
       }
@@ -248,6 +265,14 @@ export function WalkInForm({
     },
     onError: (e) => {
       const raw = (e as { message?: string } | null)?.message ?? '';
+      if (raw === 'EXTRAS_SQL_MISSING') {
+        const m = isAr
+          ? 'الإضافات محتاجة تشغيل ملف walkin-extras.sql في Supabase الأول'
+          : 'Add-ons need the walkin-extras.sql file to be run in Supabase first';
+        setLastError(m);
+        toast.error(m);
+        return;
+      }
       const msg = mapError(e, t);
       setLastError(msg);
       if (raw.includes('SLOT_TAKEN')) setConflict(true);
@@ -432,6 +457,50 @@ export function WalkInForm({
               ))}
             </select>
           </div>
+
+          {extras.length > 0 ? (
+            <div>
+              <p className="text-sm font-medium text-ink-70">{isAr ? 'إضافات (اختياري)' : 'Add-ons (optional)'}</p>
+              <div className="mt-1 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {extras.map((x) => {
+                  const on = extraIds.includes(x.id);
+                  return (
+                    <button
+                      key={x.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setExtraIds((prev) => (on ? prev.filter((i) => i !== x.id) : [...prev, x.id]))}
+                      className={`flex items-center gap-2 rounded-btn border p-2.5 text-start text-sm transition-colors ${
+                        on ? 'border-gold bg-gold/15 ring-1 ring-gold' : 'border-bark/20 bg-white hover:bg-sand/40'
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`flex size-5 shrink-0 items-center justify-center rounded-md border-2 ${
+                          on ? 'border-gold bg-gold text-espresso' : 'border-bark/30'
+                        }`}
+                      >
+                        {on ? <Check className="size-3" strokeWidth={3} /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1 break-words text-espresso">{isAr ? x.name_ar : x.name_en}</span>
+                      <span className="shrink-0 font-latin text-xs font-semibold text-bark">+{formatEGP(Number(x.price_egp))}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {serviceId ? (
+                <p className="mt-2 text-sm font-semibold text-espresso">
+                  {isAr ? 'الإجمالي: ' : 'Total: '}
+                  <span className="font-latin">
+                    {formatEGP(
+                      Number(services.find((x) => x.id === serviceId)?.price_egp ?? 0) +
+                        extras.filter((x) => extraIds.includes(x.id)).reduce((sum, x) => sum + Number(x.price_egp), 0),
+                    )}
+                  </span>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <Input
