@@ -7,7 +7,7 @@ const TodayPage = lazy(() => import('@/features/today/TodayPage').then((m) => ({
 const RoutinePage = lazy(() => import('@/features/routine/RoutinePage').then((m) => ({ default: m.RoutinePage })));
 const BookingsPage = lazy(() => import('@/features/bookings/BookingsPage').then((m) => ({ default: m.BookingsPage })));
 const MorePage = lazy(() => import('@/features/more/MorePage').then((m) => ({ default: m.MorePage })));
-const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const ExtrasPage = lazy(() => import('@/features/extras/ExtrasPage').then((m) => ({ default: m.ExtrasPage })));
 const StaffPage = lazy(() => import('@/features/staff/StaffPage').then((m) => ({ default: m.StaffPage })));
 const FinancePage = lazy(() => import('@/features/finance/FinancePage').then((m) => ({ default: m.FinancePage })));
 const LoyaltyPage = lazy(() => import('@/features/loyalty/LoyaltyPage').then((m) => ({ default: m.LoyaltyPage })));
@@ -53,7 +53,8 @@ export function AppRouter() {
           <Route path="more/customers" element={<Suspense fallback={<PageLoader />}><CustomersPage /></Suspense>} />
           <Route path="more/walk-in" element={<Suspense fallback={<PageLoader />}><WalkInPage /></Suspense>} />
           <Route path="more/maintenance" element={<Suspense fallback={<PageLoader />}><MaintenancePage /></Suspense>} />
-          <Route path="more/reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
+          <Route path="more/reports" element={<Navigate to="/more/finance?tab=bookingsReport" replace />} />
+          <Route path="more/extras" element={<Suspense fallback={<PageLoader />}><ExtrasPage /></Suspense>} />
           <Route path="more/staff" element={<Suspense fallback={<PageLoader />}><StaffPage /></Suspense>} />
           <Route path="more/finance" element={<Suspense fallback={<PageLoader />}><FinancePage /></Suspense>} />
           <Route path="more/loyalty" element={<Suspense fallback={<PageLoader />}><LoyaltyPage /></Suspense>} />

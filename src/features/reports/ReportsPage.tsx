@@ -175,7 +175,7 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-espresso">{isAr ? 'التقارير' : 'Reports'}</h1>
+      <h1 className="text-xl font-bold text-espresso">{isAr ? 'تقارير الحجوزات' : 'Booking reports'}</h1>
 
       <Card>
         <CardBody className="space-y-3 p-4">

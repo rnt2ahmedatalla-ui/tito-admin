@@ -14,6 +14,8 @@ const formatEGP = (n: number) => `\u200E${baseEGP(n)}`;
 import { cn } from '@/lib/cn';
 import { FinanceTab as IncomeTab } from '@/features/payments/FinanceTab';
 import { TransfersTab } from '@/features/payments/TransfersTab';
+import { ReportsPage as BookingsReport } from '@/features/reports/ReportsPage';
+import { useSearchParams } from 'react-router-dom';
 import {
   BUCKET_LABEL,
   KIND_LABEL,
@@ -33,7 +35,7 @@ import {
   type WalletKind,
 } from './useFinance';
 
-type TabId = 'overview' | 'income' | 'transfers' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'assets' | 'reports' | 'wallets' | 'closing' | 'categories';
+type TabId = 'bookingsReport' | 'overview' | 'income' | 'transfers' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'assets' | 'reports' | 'wallets' | 'closing' | 'categories';
 
 const selectCls = 'min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm text-espresso';
 
@@ -69,7 +71,8 @@ function addDaysStr(ymd: string, days: number) {
 
 export function FinancePage() {
   const { L } = useLang();
-  const [tab, setTab] = useState<TabId>('overview');
+  const [sp] = useSearchParams();
+  const [tab, setTab] = useState<TabId>(sp.get('tab') === 'bookingsReport' ? 'bookingsReport' : 'overview');
   const q = useFinData();
 
   const tabs: Array<{ id: TabId; label: string }> = [
@@ -81,7 +84,8 @@ export function FinancePage() {
     { id: 'budget', label: L('الميزانية', 'Budget') },
     { id: 'inventory', label: L('المخزون', 'Inventory') },
     { id: 'assets', label: L('الأصول والصيانة', 'Assets') },
-    { id: 'reports', label: L('التقارير', 'Reports') },
+    { id: 'reports', label: L('تقارير مالية', 'Finance reports') },
+    { id: 'bookingsReport', label: L('تقارير الحجوزات', 'Booking reports') },
     { id: 'wallets', label: L('المحافظ', 'Wallets') },
     { id: 'closing', label: L('الإقفال اليومي', 'Daily closing') },
     { id: 'categories', label: L('التصنيفات', 'Categories') },
@@ -117,7 +121,9 @@ export function FinancePage() {
           </button>
         ))}
       </div>
-      {tab === 'income' ? (
+      {tab === 'bookingsReport' ? (
+        <BookingsReport />
+      ) : tab === 'income' ? (
         <IncomeTab />
       ) : tab === 'transfers' ? (
         <TransfersTab />

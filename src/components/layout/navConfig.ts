@@ -8,7 +8,7 @@ import {
   Gift,
   Ticket,
   Wallet,
-  BarChart3,
+  Boxes,
   UserRound,
   Scissors,
   Package,
@@ -39,7 +39,6 @@ export const navGroups: NavGroup[] = [
     titleKey: 'nav.groupMoney',
     items: [
       { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
-      { to: '/more/reports', icon: BarChart3, labelKey: 'nav.reports' },
     ],
   },
   {
@@ -50,6 +49,7 @@ export const navGroups: NavGroup[] = [
       { to: '/more/reviews', icon: Star, labelKey: 'nav.reviews' },
       { to: '/more/loyalty', icon: Gift, labelKey: 'nav.loyalty' },
       { to: '/more/coupons', icon: Ticket, labelKey: 'nav.coupons' },
+      { to: '/more/extras', icon: Boxes, labelKey: 'nav.extras' },
     ],
   },
   {

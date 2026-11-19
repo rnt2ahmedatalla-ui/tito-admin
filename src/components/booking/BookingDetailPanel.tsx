@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { BookingWithRelations } from '@/types/database';
 import { normalizeBooking, isOnlineBooking, isShopBooking } from '@/lib/booking';
 import { Sheet } from '@/components/ui/Sheet';
+import { PackageUse } from '@/features/extras/PackageUse';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -437,6 +438,15 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
         ) : null}
 
         {/* الإجراءات */}
+        {b.status === 'confirmed' || b.status === 'completed' ? (
+          <PackageUse
+            bookingId={b.id}
+            userId={b.user_id}
+            serviceId={b.service_id}
+            alreadyUsed={!!(b as unknown as { customer_package_id?: string | null }).customer_package_id}
+            onDone={invalidate}
+          />
+        ) : null}
         <div className="space-y-2 pt-1">
           {payment?.status === 'submitted' ? (
             <div className="grid grid-cols-2 gap-2">
