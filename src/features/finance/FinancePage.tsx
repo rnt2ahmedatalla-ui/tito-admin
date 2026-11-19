@@ -18,14 +18,16 @@ import {
   todayCairo,
   useFinData,
   type Bucket,
+  type AllocItem,
   type Category,
+  type StockItem,
   type Recurring,
   type FinData,
   type Wallet,
   type WalletKind,
 } from './useFinance';
 
-type TabId = 'overview' | 'expenses' | 'recurring' | 'wallets' | 'closing' | 'categories';
+type TabId = 'overview' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'wallets' | 'closing' | 'categories';
 
 const selectCls = 'min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm text-espresso';
 
@@ -62,6 +64,8 @@ export function FinancePage() {
     { id: 'overview', label: L('نظرة عامة', 'Overview') },
     { id: 'expenses', label: L('المصروفات', 'Expenses') },
     { id: 'recurring', label: L('الثابتة', 'Recurring') },
+    { id: 'budget', label: L('الميزانية', 'Budget') },
+    { id: 'inventory', label: L('المخزون', 'Inventory') },
     { id: 'wallets', label: L('المحافظ', 'Wallets') },
     { id: 'closing', label: L('الإقفال اليومي', 'Daily closing') },
     { id: 'categories', label: L('التصنيفات', 'Categories') },
@@ -105,6 +109,10 @@ export function FinancePage() {
         <Expenses d={d} />
       ) : tab === 'recurring' ? (
         <RecurringTab d={d} />
+      ) : tab === 'budget' ? (
+        <BudgetTab d={d} />
+      ) : tab === 'inventory' ? (
+        <InventoryTab d={d} />
       ) : tab === 'wallets' ? (
         <Wallets d={d} />
       ) : tab === 'closing' ? (
@@ -148,6 +156,12 @@ function Overview({ d }: { d: FinData }) {
 
   return (
     <div className="space-y-5">
+      {d.items.filter((i) => i.is_active && i.qty <= i.min_qty).length > 0 ? (
+        <p className="rounded-btn border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+          ⚠️ {L('مخزون قرّب يخلص:', 'Low stock:')} {d.items.filter((i) => i.is_active && i.qty <= i.min_qty).map((i) => i.name).join('، ')}
+        </p>
+      ) : null}
+
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-bold text-espresso">{L('أرصدة المحافظ', 'Wallet balances')}</h2>
@@ -953,5 +967,339 @@ function Trend({ d }: { d: FinData }) {
         </ul>
       </div>
     </section>
+  );
+}
+
+/* ───────────── الميزانية وتقسيم الربح ───────────── */
+function BudgetTab({ d }: { d: FinData }) {
+  const { L } = useLang();
+  const main = d.wallets.find((w) => w.is_main) ?? d.wallets[0];
+  const [ym, setYm] = useState(todayCairo().slice(0, 7));
+  const { from, to } = monthBounds(ym);
+  const incomeQ = useQuery({ queryKey: ['fin-month', from, to], queryFn: () => fetchIncome(from, to), retry: false });
+
+  const expenseCats = d.categories.filter((c) => c.kind === 'expense' && c.is_active);
+  const spent = new Map<string, number>();
+  let expTotal = 0;
+  let extraIncome = 0;
+  for (const t of d.txs) {
+    if (t.tx_date < from || t.tx_date > to) continue;
+    if (t.kind === 'income') extraIncome += t.amount;
+    if (t.kind !== 'expense' || !t.category_id) continue;
+    spent.set(t.category_id, (spent.get(t.category_id) ?? 0) + t.amount);
+  }
+  const bucketOf = new Map<string, Bucket>(d.categories.map((c): [string, Bucket] => [c.id, c.bucket]));
+  for (const t of d.txs) {
+    if (t.kind === 'expense' && t.tx_date >= from && t.tx_date <= to && (t.category_id ? bucketOf.get(t.category_id) : 'other') !== 'owner_draw') expTotal += t.amount;
+  }
+  const net = (incomeQ.data?.grand_total ?? 0) + extraIncome - expTotal;
+
+  // الميزانية
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const budgetOf = (id: string) => (edits[id] !== undefined ? Number(edits[id]) || 0 : d.budgets.get(id) ?? 0);
+  const totalBudget = expenseCats.filter((c) => c.bucket !== 'owner_draw').reduce((s, c) => s + budgetOf(c.id), 0);
+  const saveBudget = useFinMutation(
+    async () => {
+      const rows = Object.entries(edits).map(([category_id, v]) => ({ category_id, amount: Math.max(0, Number(v) || 0) }));
+      if (rows.length === 0) throw bad('مفيش تعديلات');
+      const { error } = await untypedDb.from('fin_budgets').upsert(rows);
+      if (error) throw error;
+    },
+    L('اتحفظت الميزانية', 'Budget saved'),
+    () => setEdits({}),
+  );
+
+  // تقسيم الربح
+  const [alloc, setAlloc] = useState<AllocItem[]>(d.settings?.alloc ?? []);
+  const pctSum = alloc.reduce((s, a) => s + (Number(a.pct) || 0), 0);
+  const targetWallet = (a: AllocItem): Wallet | undefined => {
+    if (a.wallet_id) return d.wallets.find((w) => w.id === a.wallet_id);
+    if (a.kind === 'savings' || a.kind === 'development') return d.wallets.find((w) => w.kind === a.kind && w.is_active);
+    return undefined;
+  };
+  const saveAlloc = useFinMutation(async () => {
+    if (pctSum > 100) throw bad('مجموع النسب أكبر من 100%');
+    const { error } = await untypedDb.from('fin_settings').update({ alloc }).eq('id', 1);
+    if (error) throw error;
+  }, L('اتحفظ التقسيم', 'Split saved'));
+  const moveNow = useFinMutation(async (a: AllocItem) => {
+    const w = targetWallet(a);
+    const amt = Math.floor((net * (Number(a.pct) || 0)) / 100);
+    if (!main || !w || amt <= 0) throw bad('مفيش محفظة هدف أو الربح صفر');
+    const { error } = await untypedDb.from('fin_transactions').insert({
+      tx_date: todayCairo(), kind: 'transfer', amount: amt, wallet_id: main.id, to_wallet_id: w.id, note: `تقسيم ربح ${ym}: ${a.name}`,
+    });
+    if (error) throw error;
+  }, L('اتحوّل', 'Transferred'));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h2 className="text-lg font-bold text-espresso">{L('الميزانية', 'Budget')}</h2>
+        <Input type="month" label={L('الشهر', 'Month')} value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} />
+      </div>
+
+      {!d.extraReady ? (
+        <p className="rounded-btn bg-sand/50 p-3 text-sm">{L('محتاج تشغّل ملف finance-f3-f4.sql في Supabase الأول.', 'Run finance-f3-f4.sql first.')}</p>
+      ) : (
+        <>
+          <section className="space-y-2">
+            <p className="text-sm text-ink-70">
+              {L('حط حد شهري لكل تصنيف، والنظام يحذّرك لما تقرّب منه.', 'Set a monthly limit per category.')}
+            </p>
+            <ul className="divide-y divide-bark/10 rounded-card border border-default bg-white">
+              {expenseCats.filter((c) => c.bucket !== 'owner_draw').map((c) => {
+                const sp = spent.get(c.id) ?? 0;
+                const b = budgetOf(c.id);
+                const ratio = b > 0 ? sp / b : 0;
+                return (
+                  <li key={c.id} className="space-y-1.5 p-3">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="min-w-0 break-words font-medium text-espresso">{c.name}</span>
+                      <span className="w-24 shrink-0">
+                        <input
+                          inputMode="decimal"
+                          aria-label={L('الميزانية', 'Budget')}
+                          placeholder="0"
+                          value={edits[c.id] ?? (d.budgets.get(c.id) ? String(d.budgets.get(c.id)) : '')}
+                          onChange={(e) => setEdits((p) => ({ ...p, [c.id]: e.target.value }))}
+                          className="min-h-9 w-full rounded-btn border border-bark/20 bg-white px-2 text-center font-latin text-sm"
+                        />
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-sand/60">
+                      <div
+                        className={cn('h-full rounded-full', ratio > 1 ? 'bg-danger' : ratio > 0.8 ? 'bg-amber-500' : 'bg-gold')}
+                        style={{ width: `${Math.min(100, Math.max(sp > 0 ? 3 : 0, ratio * 100))}%` }}
+                      />
+                    </div>
+                    <p className={cn('text-xs', ratio > 1 ? 'font-semibold text-danger' : 'text-ink-70')}>
+                      {L('صرفت', 'Spent')} <span className="font-latin">{formatEGP(sp)}</span>
+                      {b > 0 ? <> {L('من', 'of')} <span className="font-latin">{formatEGP(b)}</span>{ratio > 1 ? ` · ${L('تعدّيت الميزانية', 'over budget')}` : ratio > 0.8 ? ` · ${L('قربت تخلص', 'almost used')}` : ''}</> : null}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="text-sm text-ink-70">
+              {L('إجمالي الميزانية:', 'Total budget:')} <span className="font-latin font-bold text-espresso">{formatEGP(totalBudget)}</span> · {L('المصروف الفعلي:', 'Spent:')}{' '}
+              <span className="font-latin font-bold text-espresso">{formatEGP(expTotal)}</span>
+            </p>
+            <Button className="w-full" loading={saveBudget.isPending} disabled={Object.keys(edits).length === 0} onClick={() => saveBudget.mutate(undefined as never)}>
+              {L('حفظ الميزانية', 'Save budget')}
+            </Button>
+          </section>
+
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-bold text-espresso">{L('تقسيم صافي الربح', 'Profit split')}</h2>
+              <p className="text-xs text-ink-70">
+                {L('نسب مقترحة (ادخار 20% · تطوير 10% · طوارئ 10% · مالك 60%) تقدر تعدّلها. صافي ربح الشهر:', 'Suggested split, editable. Net profit:')}{' '}
+                <span className="font-latin font-bold text-espresso">{formatEGP(net)}</span>
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {alloc.map((a, i) => {
+                const amt = Math.max(0, Math.floor((net * (Number(a.pct) || 0)) / 100));
+                const tw = targetWallet(a);
+                return (
+                  <li key={a.id} className="space-y-2 rounded-card border border-default bg-white p-3">
+                    <div className="flex items-end gap-2">
+                      <div className="min-w-0 flex-1">
+                        <Input label={L('الاسم', 'Name')} value={a.name} onChange={(e) => setAlloc((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                      </div>
+                      <div className="w-20 shrink-0">
+                        <Input label="%" inputMode="decimal" value={String(a.pct)} onChange={(e) => setAlloc((p) => p.map((x, j) => (j === i ? { ...x, pct: Number(e.target.value) || 0 } : x)))} />
+                      </div>
+                      <button className="mb-2 px-1 text-danger" aria-label={L('مسح', 'Remove')} onClick={() => setAlloc((p) => p.filter((_, j) => j !== i))}>✕</button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="font-latin font-bold text-espresso">{formatEGP(amt)}</span>
+                      {a.kind !== 'owner' ? (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <select
+                            className="min-h-9 min-w-0 rounded-btn border border-bark/20 bg-white px-2 text-xs"
+                            value={a.wallet_id ?? tw?.id ?? ''}
+                            onChange={(e) => setAlloc((p) => p.map((x, j) => (j === i ? { ...x, wallet_id: e.target.value || null } : x)))}
+                          >
+                            <option value="">{L('بدون محفظة', 'No wallet')}</option>
+                            {d.wallets.filter((w) => w.is_active).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                          </select>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={!tw || amt <= 0}
+                            onClick={() => { if (window.confirm(L(`تحوّل ${amt} جنيه لـ ${tw?.name ?? ''}؟`, `Transfer ${amt} to ${tw?.name ?? ''}?`))) moveNow.mutate(a); }}
+                          >{L('حوّل', 'Move')}</Button>
+                        </span>
+                      ) : <span className="text-xs text-ink-70">{L('بتسحبها لنفسك (سحب المالك)', 'Your draw')}</span>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="flex items-center justify-between gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setAlloc((p) => [...p, { id: `a${Date.now()}`, name: '', pct: 0, kind: 'other' }])}>{L('+ بند', '+ Item')}</Button>
+              <span className={cn('text-sm font-semibold', pctSum > 100 ? 'text-danger' : 'text-ink-70')}>{L('المجموع', 'Total')}: <span className="font-latin">{pctSum}%</span></span>
+            </div>
+            <Button className="w-full" loading={saveAlloc.isPending} onClick={() => saveAlloc.mutate(undefined as never)}>{L('حفظ التقسيم', 'Save split')}</Button>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ───────────── المخزون ───────────── */
+function InventoryTab({ d }: { d: FinData }) {
+  const { L } = useLang();
+  const main = d.wallets.find((w) => w.is_main) ?? d.wallets[0];
+  const supplyCat = d.categories.find((c) => c.kind === 'expense' && c.bucket === 'operating' && c.name.includes('مستلزمات'));
+  const [editId, setEditId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [unit, setUnit] = useState('قطعة');
+  const [minQty, setMinQty] = useState('0');
+  const [openQty, setOpenQty] = useState('0');
+  const [mv, setMv] = useState<{ id: string; sign: 1 | -1 } | null>(null);
+  const [qty, setQty] = useState('');
+  const [cost, setCost] = useState('');
+  const [note, setNote] = useState('');
+  const [asExpense, setAsExpense] = useState(true);
+
+  const startEdit = (it: StockItem | null) => {
+    setEditId(it ? it.id : 'new');
+    setName(it?.name ?? '');
+    setUnit(it?.unit ?? 'قطعة');
+    setMinQty(String(it?.min_qty ?? 0));
+    setOpenQty('0');
+  };
+  const saveItem = useFinMutation(
+    async () => {
+      if (!name.trim()) throw bad('اكتب اسم الصنف');
+      const row = { name: name.trim(), unit: unit.trim() || 'قطعة', min_qty: Math.max(0, Number(minQty) || 0) };
+      if (editId === 'new') {
+        const r = await untypedDb.from('fin_items').insert(row).select('id').single();
+        if (r.error) throw r.error;
+        const q = Number(openQty) || 0;
+        if (q > 0) {
+          const m = await untypedDb.from('fin_item_moves').insert({ item_id: (r.data as { id: string }).id, delta: q, note: 'رصيد افتتاحي' });
+          if (m.error) throw m.error;
+        }
+      } else {
+        const r = await untypedDb.from('fin_items').update(row).eq('id', editId as string);
+        if (r.error) throw r.error;
+      }
+    },
+    L('اتحفظ', 'Saved'),
+    () => setEditId(null),
+  );
+  const toggle = useFinMutation(async (it: StockItem) => {
+    const { error } = await untypedDb.from('fin_items').update({ is_active: !it.is_active }).eq('id', it.id);
+    if (error) throw error;
+  }, L('تمام', 'Done'));
+  const move = useFinMutation(
+    async () => {
+      if (!mv) return;
+      const q = Number(qty);
+      if (!(q > 0)) throw bad('اكتب الكمية');
+      const m = await untypedDb.from('fin_item_moves').insert({ item_id: mv.id, delta: mv.sign * q, note: note.trim() || null });
+      if (m.error) throw m.error;
+      const c = Number(cost);
+      if (mv.sign === 1 && c > 0) {
+        await untypedDb.from('fin_items').update({ last_cost: c / q }).eq('id', mv.id);
+        if (asExpense && main) {
+          const t = await untypedDb.from('fin_transactions').insert({
+            tx_date: todayCairo(), kind: 'expense', amount: c, wallet_id: main.id, category_id: supplyCat?.id ?? null,
+            note: `شراء مخزون: ${d.items.find((i) => i.id === mv.id)?.name ?? ''}`,
+          });
+          if (t.error) throw t.error;
+        }
+      }
+    },
+    L('اتسجّلت الحركة', 'Recorded'),
+    () => { setMv(null); setQty(''); setCost(''); setNote(''); },
+  );
+
+  if (!d.extraReady) {
+    return <p className="rounded-btn bg-sand/50 p-3 text-sm">{L('محتاج تشغّل ملف finance-f3-f4.sql في Supabase الأول.', 'Run finance-f3-f4.sql first.')}</p>;
+  }
+  const low = d.items.filter((i) => i.is_active && i.qty <= i.min_qty);
+  const stockValue = d.items.filter((i) => i.is_active).reduce((s, i) => s + Math.max(0, i.qty) * i.last_cost, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-espresso">{L('المخزون والمستلزمات', 'Inventory')}</h2>
+          <p className="text-xs text-ink-70">{L('شفرات، شامبو، فوط... سجّل الشراء والاستهلاك وهيتنبّه لما يقل.', 'Track supplies; get a warning when low.')}</p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={() => startEdit(null)}>{L('+ صنف', '+ Item')}</Button>
+      </div>
+      {low.length > 0 ? (
+        <p className="rounded-btn border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+          ⚠️ {L('قرّب يخلص:', 'Running low:')} {low.map((i) => i.name).join('، ')}
+        </p>
+      ) : null}
+      <p className="text-sm text-ink-70">{L('قيمة المخزون تقريباً:', 'Approx. stock value:')} <span className="font-latin font-bold text-espresso">{formatEGP(stockValue)}</span></p>
+
+      {d.items.length === 0 ? (
+        <p className="text-sm text-ink-70">{L('لسه مفيش أصناف.', 'No items yet.')}</p>
+      ) : (
+        <ul className="divide-y divide-bark/10 rounded-card border border-default bg-white">
+          {d.items.map((it) => {
+            const isLow = it.qty <= it.min_qty;
+            return (
+              <li key={it.id} className={cn('space-y-2 p-3 text-sm', !it.is_active && 'opacity-50')}>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 break-words font-medium text-espresso">{it.name}</span>
+                  <span className={cn('shrink-0 font-latin font-bold', isLow ? 'text-danger' : 'text-espresso')}>
+                    {it.qty} <span className="text-xs font-normal">{it.unit}</span>
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <button className="rounded-btn bg-gold/20 px-2.5 py-1 font-medium" onClick={() => { setMv({ id: it.id, sign: 1 }); setQty(''); setCost(''); }}>+ {L('شراء', 'Buy')}</button>
+                  <button className="rounded-btn bg-sand/60 px-2.5 py-1 font-medium" onClick={() => { setMv({ id: it.id, sign: -1 }); setQty(''); }}>− {L('استهلاك', 'Use')}</button>
+                  <button className="text-gold underline" onClick={() => startEdit(it)}>{L('تعديل', 'Edit')}</button>
+                  <button className="text-ink-70 underline" onClick={() => toggle.mutate(it)}>{it.is_active ? L('إخفاء', 'Hide') : L('إظهار', 'Show')}</button>
+                  <span className="ms-auto text-ink-70">{L('الحد الأدنى', 'Min')} <span className="font-latin">{it.min_qty}</span></span>
+                </div>
+                {mv?.id === it.id ? (
+                  <div className="space-y-2 rounded-btn bg-sand/30 p-3">
+                    <Input label={mv.sign === 1 ? L('الكمية المشتراة', 'Quantity bought') : L('الكمية المستهلكة', 'Quantity used')} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+                    {mv.sign === 1 ? (
+                      <>
+                        <Input label={L('إجمالي التكلفة (اختياري)', 'Total cost (optional)')} inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
+                        <label className="flex items-center gap-2 text-xs text-ink-70">
+                          <input type="checkbox" className="size-4 accent-[#c9953f]" checked={asExpense} onChange={(e) => setAsExpense(e.target.checked)} />
+                          {L('سجّلها كمصروف من درج الكاش', 'Also record as an expense')}
+                        </label>
+                      </>
+                    ) : null}
+                    <Input label={L('ملاحظة', 'Note')} value={note} onChange={(e) => setNote(e.target.value)} />
+                    <div className="flex gap-2">
+                      <Button variant="secondary" className="w-full" onClick={() => setMv(null)}>{L('إلغاء', 'Cancel')}</Button>
+                      <Button className="w-full" loading={move.isPending} onClick={() => move.mutate(undefined as never)}>{L('تسجيل', 'Save')}</Button>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {editId ? (
+        <Card><CardBody className="space-y-3 p-4">
+          <Input label={L('اسم الصنف', 'Item name')} value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label={L('الوحدة (قطعة، علبة، لتر...)', 'Unit')} value={unit} onChange={(e) => setUnit(e.target.value)} />
+          <Input label={L('الحد الأدنى (نبّهني لما يقل عنه)', 'Alert when at or below')} inputMode="decimal" value={minQty} onChange={(e) => setMinQty(e.target.value)} />
+          {editId === 'new' ? <Input label={L('الكمية الحالية', 'Current quantity')} inputMode="decimal" value={openQty} onChange={(e) => setOpenQty(e.target.value)} /> : null}
+          <div className="flex gap-2">
+            <Button variant="secondary" className="w-full" onClick={() => setEditId(null)}>{L('إلغاء', 'Cancel')}</Button>
+            <Button className="w-full" loading={saveItem.isPending} onClick={() => saveItem.mutate(undefined as never)}>{L('حفظ', 'Save')}</Button>
+          </div>
+        </CardBody></Card>
+      ) : null}
+    </div>
   );
 }
