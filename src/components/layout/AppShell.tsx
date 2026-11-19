@@ -42,6 +42,7 @@ const sidebarLinks = [
   { to: '/more/walk-in', labelKey: 'nav.walkIn' },
   { to: '/more/reports', labelKey: 'nav.reports' },
   { to: '/more/coupons', labelKey: 'nav.coupons' },
+  { to: '/more/loyalty', labelKey: 'nav.loyalty' },
   { to: '/more/settings', labelKey: 'nav.settings' },
   { to: '/more/maintenance', labelKey: 'nav.maintenance' },
 ];
