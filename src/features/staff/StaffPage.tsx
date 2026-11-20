@@ -411,6 +411,7 @@ export function StaffPage() {
   const [servicesFor, setServicesFor] = useState<StaffMember | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const phones = useStaffPhones();
+  const isOwnerForm = !!form?.id && !!staffQuery.data?.find((x) => x.id === form.id)?.is_owner;
   const [share, setShare] = useState<{ name: string; phone: string; user: string; pass: string } | null>(null);
   const [toDelete, setToDelete] = useState<StaffMember | null>(null);
   const [scheduleFor, setScheduleFor] = useState<StaffMember | null>(null);
@@ -431,6 +432,12 @@ export function StaffPage() {
         photo: f.photo.trim() || null,
       };
       let staffId = f.id ?? '';
+      const fail = (e: unknown): never => {
+        // الحلاق اتحفظ بس خطوة بعده فشلت: نحوّل الفورم لوضع التعديل عشان ميتكررش
+        const err = new Error((e as { message?: string } | null)?.message ?? 'ERR') as Error & { staffId?: string };
+        err.staffId = staffId;
+        throw err;
+      };
       if (f.id) {
         const res = await untypedDb.from('staff').update(row).eq('id', f.id);
         if (res.error) throw res.error;
@@ -459,7 +466,7 @@ export function StaffPage() {
       let loginDone = false;
       if (f.username.trim() && f.password) {
         const r = await loginRpc('admin_set_staff_login', { p_staff: staffId, p_username: f.username, p_password: f.password });
-        if (r.error) throw new Error(r.error.message);
+        if (r.error) return fail(r.error);
         loginDone = true;
       }
       return { phoneErr, loginDone, name: f.name.trim(), phone: f.phone.trim(), user: f.username.trim().toLowerCase(), pass: f.password };
@@ -473,7 +480,12 @@ export function StaffPage() {
       void queryClient.invalidateQueries({ queryKey: ['staff-emails'] });
       if (r.loginDone) setShare({ name: r.name, phone: r.phone, user: r.user, pass: r.pass });
     },
-    onError: (e) =>
+    onError: (e) => {
+      const sid = (e as Error & { staffId?: string }).staffId;
+      if (sid) {
+        setForm((cur) => (cur ? { ...cur, id: sid } : cur));
+        refresh();
+      }
       toast.error(
         (e as Error).message === 'NAME_REQUIRED' ? L('اكتب اسم الحلاق', 'Enter the name')
         : /USERNAME_TAKEN/.test((e as Error).message) ? L('اسم المستخدم ده مستخدم، اختار غيره', 'Username already taken')
@@ -481,7 +493,8 @@ export function StaffPage() {
         : /BAD_PASSWORD/.test((e as Error).message) ? L('الباسورد 6 حروف على الأقل', 'Password: at least 6 characters')
         : L('معرفتش أحفظ، جرّب تاني', 'Could not save, try again'),
         { description: (e as Error).message === 'NAME_REQUIRED' ? undefined : errMsg(e) },
-      ),
+      );
+    },
   });
 
   const makeOwner = useMutation({
@@ -672,6 +685,10 @@ export function StaffPage() {
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
+              {isOwnerForm ? (
+                <p className="pt-1 text-xs text-ink-70">{L('إنت صاحب المحل: بتدخل بحسابك الأساسي، مش محتاج اسم مستخدم هنا.', 'You are the owner: sign in with your main account, no username needed here.')}</p>
+              ) : (
+                <>
               <p className="pt-1 text-xs text-ink-70">
                 {L('دخوله لصفحة حجوزاته: اكتب اسم مستخدم وباسورد من عندك (سيبهم فاضيين لو مش عايز تدّيه دخول دلوقتي).', 'Sign-in to see his bookings: choose a username and password (leave empty for no login).')}
               </p>
@@ -690,6 +707,8 @@ export function StaffPage() {
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                 />
               </div>
+                </>
+              )}
             </div>
             <div className="space-y-2 rounded-btn border border-default p-3">
               <p className="text-sm font-medium text-ink-70">{L('السوشيال ميديا (اختياري، بتظهر للعميل في صفحته)', 'Social media (optional, shown on his page)')}</p>

@@ -8,9 +8,10 @@ export type FeatureFlags = {
   inactiveBanner: boolean;
   inactiveAfterDays: number;
   noshowPrepayAfter: number;
+  waitWindowHours: number;
 };
 
-const OFF: FeatureFlags = { waitlist: false, packages: false, waitEstimate: false, inactiveBanner: false, inactiveAfterDays: 28, noshowPrepayAfter: 0 };
+const OFF: FeatureFlags = { waitlist: false, packages: false, waitEstimate: false, inactiveBanner: false, inactiveAfterDays: 28, noshowPrepayAfter: 0, waitWindowHours: 3 };
 
 /** مفاتيح تشغيل المميزات الإضافية (لو الجدول مش موجود يرجع كله مقفول) */
 export function useFeatureFlags() {
@@ -27,6 +28,7 @@ export function useFeatureFlags() {
         inactiveBanner: !!r.inactive_banner_enabled,
         inactiveAfterDays: Number(r.inactive_after_days ?? 28),
         noshowPrepayAfter: Number(r.noshow_prepay_after ?? 0),
+        waitWindowHours: Number(r.wait_window_hours ?? 3),
       };
     },
     staleTime: 30_000,

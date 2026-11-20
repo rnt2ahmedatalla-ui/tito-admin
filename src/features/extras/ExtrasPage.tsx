@@ -71,12 +71,13 @@ function Toggles() {
     {
       key: 'wait_estimate_enabled',
       on: !!f?.waitEstimate,
-      title: L('وقت الانتظار المتوقع', 'Estimated wait'),
-      hint: L('بيظهر للعميل في الصفحة الرئيسية: لو جيت دلوقتي هتستنى تقريباً كام دقيقة.', 'Shows customers on the home page roughly how long they would wait if they came now.'),
+      title: L('الحلاقين الفاضيين دلوقتي', 'Barbers available now'),
+      hint: L('بيظهر للعميل في الصفحة الرئيسية الحلاقين الفاضيين دلوقتي أو اللي هيفضوا خلال الساعات اللي تحددها تحت، ومعاه زرار تسجيل في قايمة الانتظار. بيختفي لو عندك حلاق واحد بس أو المحل مقفول.', 'Shows customers the barbers who are free now or will be within the hours you set below, with a waiting-list button. Hidden with a single barber or when closed.'),
     },
   ];
   const [days, setDays] = useState<string | null>(null);
   const [prepay, setPrepay] = useState<string | null>(null);
+  const [win, setWin] = useState<string | null>(null);
   const saveNum = (key: string, raw: string, min: number, max: number) => {
     const n = Math.round(Number(raw));
     if (!(n >= min && n <= max)) {
@@ -130,6 +131,25 @@ function Toggles() {
               />
             </div>
             <Button variant="secondary" loading={save.isPending} onClick={() => saveNum('inactive_after_days', days ?? String(f?.inactiveAfterDays ?? 28), 3, 365)}>
+              {L('حفظ', 'Save')}
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2 p-4">
+          <p className="font-semibold text-espresso">{L('كام ساعة قدّام نعرض الحلاق اللي هيفضى؟', 'How many hours ahead to show a barber who will be free')}</p>
+          <p className="text-xs text-ink-70">
+            {L('مثلاً 3: العميل يشوف الحلاق الفاضي دلوقتي، أو اللي هيفضى خلال 3 ساعات. اللي هيفضى بعد كده مبيظهرش. (من 1 لـ 12)', 'E.g. 3: shows barbers free now or within 3 hours. Others are hidden. (1 to 12)')}
+          </p>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                label={L('عدد الساعات', 'Hours')}
+                inputMode="numeric"
+                value={win ?? String(f?.waitWindowHours ?? 3)}
+                onChange={(e) => setWin(e.target.value)}
+              />
+            </div>
+            <Button variant="secondary" loading={save.isPending} onClick={() => saveNum('wait_window_hours', win ?? String(f?.waitWindowHours ?? 3), 1, 12)}>
               {L('حفظ', 'Save')}
             </Button>
           </div>
