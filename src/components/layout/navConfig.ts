@@ -20,6 +20,7 @@ import {
   DatabaseBackup,
   History,
   Eraser,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -59,6 +60,7 @@ export const navGroups: NavGroup[] = [
     id: 'shop',
     titleKey: 'nav.groupShop',
     items: [
+      { to: '/more/emergency', icon: TriangleAlert, labelKey: 'nav.emergency' },
       { to: '/more/staff', icon: UserRound, labelKey: 'nav.staff' },
       { to: '/more/services', icon: Scissors, labelKey: 'nav.services' },
       { to: '/more/products', icon: Package, labelKey: 'nav.products' },
