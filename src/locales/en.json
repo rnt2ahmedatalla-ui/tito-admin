@@ -63,11 +63,12 @@
     "groupSystem": "System",
     "routineShort": "Routine",
     "groupQuick": "Shortcuts",
-    "extras": "Packages & features",
+    "extras": "Extras & features",
     "backup": "Backup",
     "audit": "Activity log",
     "cleanup": "Data cleanup",
-    "emergency": "Emergency"
+    "emergency": "Emergency",
+    "seasons": "Seasons & holidays"
   },
   "status": {
     "pending_payment": "Pending payment",

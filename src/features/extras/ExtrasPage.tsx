@@ -87,7 +87,9 @@ function Toggles() {
     }
     save.mutate({ [key]: n });
   };
-  if (flags.isError) return null;
+  if (flags.isError) return (
+    <Card><CardBody className="text-sm text-danger">شغّل ملف features-v41.sql في Supabase عشان تظهر إعدادات «تمت تلقائي».</CardBody></Card>
+  );
   return (
     <Card>
       <CardBody className="divide-y divide-default p-0">

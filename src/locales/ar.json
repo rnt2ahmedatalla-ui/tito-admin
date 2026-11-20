@@ -63,11 +63,12 @@
     "groupSystem": "النظام",
     "routineShort": "روتين",
     "groupQuick": "اختصارات",
-    "extras": "الباقات والمميزات",
+    "extras": "الإضافات والمميزات",
     "backup": "نسخة احتياطية",
     "audit": "سجل العمليات",
     "cleanup": "تنظيف البيانات",
-    "emergency": "ظرف طارئ"
+    "emergency": "ظرف طارئ",
+    "seasons": "المواسم والأعياد"
   },
   "status": {
     "pending_payment": "في انتظار الدفع",

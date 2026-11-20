@@ -26,6 +26,7 @@ const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(
 const CustomersPage = lazy(() => import('@/features/customers/CustomersPage').then((m) => ({ default: m.CustomersPage })));
 const WalkInPage = lazy(() => import('@/features/walkin/WalkInPage').then((m) => ({ default: m.WalkInPage })));
 const CleanupPage = lazy(() => import('@/features/cleanup/CleanupPage').then((m) => ({ default: m.CleanupPage })));
+const SeasonsPage = lazy(() => import('@/features/seasons/SeasonsPage').then((m) => ({ default: m.SeasonsPage })));
 const EmergencyPage = lazy(() => import('@/features/emergency/EmergencyPage').then((m) => ({ default: m.EmergencyPage })));
 const MaintenancePage = lazy(() => import('@/features/maintenance/MaintenancePage').then((m) => ({ default: m.MaintenancePage })));
 
@@ -71,6 +72,7 @@ export function AppRouter() {
           <Route path="more/settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
           <Route path="more/customers" element={<Suspense fallback={<PageLoader />}><CustomersPage /></Suspense>} />
           <Route path="more/walk-in" element={<Suspense fallback={<PageLoader />}><WalkInPage /></Suspense>} />
+          <Route path="more/seasons" element={<Suspense fallback={<PageLoader />}><SeasonsPage /></Suspense>} />
           <Route path="more/emergency" element={<Suspense fallback={<PageLoader />}><EmergencyPage /></Suspense>} />
           <Route path="more/cleanup" element={<Suspense fallback={<PageLoader />}><CleanupPage /></Suspense>} />
           <Route path="more/maintenance" element={<Suspense fallback={<PageLoader />}><MaintenancePage /></Suspense>} />
