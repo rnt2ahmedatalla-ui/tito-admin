@@ -1,3 +1,5 @@
+import { AssistantsPanel } from './AssistantsPanel';
+import { useAuth } from '@/hooks/useAuth';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -402,7 +404,7 @@ function errMsg(e: unknown): string {
   return m;
 }
 
-export function StaffPage() {
+function BarbersPanel() {
   const { i18n } = useTranslation();
   const isAr = !!i18n.language?.startsWith('ar');
   const L = (ar: string, en: string) => (isAr ? ar : en);
@@ -835,6 +837,27 @@ export function StaffPage() {
         onConfirm={() => toDelete && remove.mutate(toDelete.id)}
         onCancel={() => setToDelete(null)}
       />
+    </div>
+  );
+}
+
+export function StaffPage() {
+  const { i18n } = useTranslation();
+  const isAr = !!i18n.language?.startsWith('ar');
+  const role = useAuth().role;
+  const [tab, setTab] = useState<'barbers' | 'assistants'>('barbers');
+  if (role === 'staff') return <BarbersPanel />;
+  return (
+    <div className="min-w-0 max-w-full space-y-4">
+      <div role="tablist" className="grid grid-cols-2 gap-1 rounded-card bg-sand/60 p-1">
+        {([['barbers', isAr ? 'الحلاقين' : 'Barbers'], ['assistants', isAr ? 'المساعدين' : 'Assistants']] as const).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+            className={cn('min-h-10 rounded-btn text-sm font-semibold transition-colors', tab === k ? 'bg-white text-espresso shadow-warm' : 'text-ink-70')}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'barbers' ? <BarbersPanel /> : <AssistantsPanel />}
     </div>
   );
 }
