@@ -9,7 +9,8 @@ import type { BookingWithRelations } from '@/types/database';
 import { normalizeBooking, isOnlineBooking, isShopBooking } from '@/lib/booking';
 import { Sheet } from '@/components/ui/Sheet';
 import { PackageUse } from '@/features/extras/PackageUse';
-import { CustomerFlags, RateRequest } from '@/features/extras/BookingExtras';
+import { CustomerFlags, RateRequest, rateMessage } from '@/features/extras/BookingExtras';
+import { waLink } from '@/features/staff/staffLogin';
 import { useAuth } from '@/hooks/useAuth';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -238,7 +239,12 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
   const b = normalizeBooking(booking);
   const name = b.profile?.full_name ?? '—';
   const phone = isStaff ? '' : (b.profile?.phone ?? '');
-  const waUrl = phone ? buildWhatsAppUrl(phone, '') : null;
+  const rateTok = (b as unknown as { rate_token?: string | null }).rate_token;
+  const waUrl = phone
+    ? b.status === 'completed' && rateTok
+      ? waLink(phone, rateMessage(name, rateTok, !!i18n.language?.startsWith('ar')))
+      : buildWhatsAppUrl(phone, '')
+    : null;
   const locale = i18n.language;
   const offeredAt =
     offerFor === b.id ? localOffer : b.move_status === 'pending' ? b.move_start_at : null;

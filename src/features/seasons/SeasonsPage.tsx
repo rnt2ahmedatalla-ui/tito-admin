@@ -26,6 +26,14 @@ type Period = {
   is_active: boolean;
 };
 
+const toMin = (s: string) => { const [h, m] = s.split(':'); return (Number(h) || 0) * 60 + (Number(m) || 0); };
+const fromMin = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+/** نفس حساب «مواعيد العمل»: آخر خانة بتخلّص مع القفل بالظبط بنفس الفاصل بين المواعيد */
+function autoLast(open: string, close: string, step: number): string {
+  const o = toMin(open); const c = toMin(close); const limit = c - step;
+  if (step <= 0 || limit < o) return open;
+  return fromMin(o + Math.floor((limit - o) / step) * step);
+}
 const hm = (s: string | null | undefined) => (s ? s.slice(0, 5) : '');
 const todayYmd = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
 
@@ -40,6 +48,7 @@ const EMPTY = {
   last_slot_start: '',
   breaks: [] as Brk[],
   is_active: true,
+  lastAuto: true,
 };
 
 export function SeasonsPage() {
@@ -50,6 +59,16 @@ export function SeasonsPage() {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
   const [delId, setDelId] = useState<string | null>(null);
+
+  const stepQ = useQuery({
+    queryKey: ['slot-step'],
+    queryFn: async () => {
+      const { data } = await untypedDb.from('settings').select('slot_step_min').eq('id', 1).maybeSingle();
+      return Number((data as { slot_step_min?: number } | null)?.slot_step_min ?? 30) || 30;
+    },
+  });
+  const step = stepQ.data ?? 30;
+  const lastShown = form.lastAuto ? autoLast(form.open_time, form.close_time, step) : form.last_slot_start;
 
   const q = useQuery({
     queryKey: ['special-periods'],
@@ -77,7 +96,7 @@ export function SeasonsPage() {
         release_on: form.release_on || null,
         open_time: form.open_time,
         close_time: form.close_time,
-        last_slot_start: form.last_slot_start || null,
+        last_slot_start: lastShown || null,
         breaks: form.breaks,
         is_active: form.is_active,
       };
@@ -120,6 +139,7 @@ export function SeasonsPage() {
         last_slot_start: hm(p.last_slot_start),
         breaks: (p.breaks ?? []).map((b) => ({ start: hm(b.start), end: hm(b.end) })),
         is_active: p.is_active,
+        lastAuto: !p.last_slot_start || hm(p.last_slot_start) === autoLast(hm(p.open_time), hm(p.close_time), step),
       });
       setEditing(p.id);
     } else {
@@ -183,12 +203,24 @@ export function SeasonsPage() {
 
             <div className="rounded-btn bg-sand/50 p-3">
               <p className="mb-2 text-sm font-semibold text-espresso">{L('٢) مواعيد الشغل في الموسم', '2) Hours during the season')}</p>
-              <div className="grid grid-cols-3 gap-3">
-                <Input type="time" label={L('بنفتح', 'Open')} value={form.open_time} onChange={(e) => set('open_time', e.target.value)} />
-                <Input type="time" label={L('بنقفل', 'Close')} value={form.close_time} onChange={(e) => set('close_time', e.target.value)} />
-                <Input type="time" label={L('آخر حجز', 'Last slot')} value={form.last_slot_start} onChange={(e) => set('last_slot_start', e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input type="time" label={L('بنفتح', 'Open')} value={form.open_time} onChange={(e) => set('open_time', e.target.value)} className="px-2 text-center text-lg" />
+                <Input type="time" label={L('بنقفل', 'Close')} value={form.close_time} onChange={(e) => set('close_time', e.target.value)} className="px-2 text-center text-lg" />
               </div>
-              <p className="mt-1 text-xs text-ink-70">{L('آخر حجز فاضي = قبل القفل بنص ساعة.', 'Empty last slot = 30 min before close.')}</p>
+              <div className="mt-3 rounded-btn bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-espresso">{L('آخر معاد حجز', 'Last booking time')}</p>
+                    <p className="text-xs text-ink-70">{form.lastAuto ? L('بيتحسب لوحده حسب القفل والفاصل بين المواعيد', 'Calculated from closing time & slot step') : L('إنت محدده بإيدك', 'Set manually')}</p>
+                  </div>
+                  <p className="font-latin text-xl font-semibold text-espresso" dir="ltr">{lastShown}</p>
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-sm">
+                  <input type="checkbox" className="size-4" checked={form.lastAuto} onChange={(e) => setForm((f) => ({ ...f, lastAuto: e.target.checked, last_slot_start: e.target.checked ? f.last_slot_start : autoLast(f.open_time, f.close_time, step) }))} />
+                  {L('تلقائي', 'Automatic')}
+                </label>
+                {!form.lastAuto ? <div className="mt-2"><Input type="time" value={form.last_slot_start} onChange={(e) => set('last_slot_start', e.target.value)} className="px-2 text-center text-lg" /></div> : null}
+              </div>
             </div>
 
             <div className="rounded-btn bg-sand/50 p-3">
@@ -196,9 +228,9 @@ export function SeasonsPage() {
               <div className="space-y-2">
                 {form.breaks.map((b, i) => (
                   <div key={i} className="flex items-end gap-2">
-                    <Input type="time" label={i === 0 ? L('من', 'From') : undefined} value={b.start}
+                    <Input type="time" className="px-2 text-center text-lg" label={i === 0 ? L('من', 'From') : undefined} value={b.start}
                       onChange={(e) => set('breaks', form.breaks.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))} />
-                    <Input type="time" label={i === 0 ? L('إلى', 'To') : undefined} value={b.end}
+                    <Input type="time" className="px-2 text-center text-lg" label={i === 0 ? L('إلى', 'To') : undefined} value={b.end}
                       onChange={(e) => set('breaks', form.breaks.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))} />
                     <Button variant="ghost" aria-label={L('شيل', 'Remove')} onClick={() => set('breaks', form.breaks.filter((_, j) => j !== i))}>
                       <X className="size-4" />
