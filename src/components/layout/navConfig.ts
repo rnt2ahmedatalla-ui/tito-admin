@@ -21,6 +21,7 @@ import {
   History,
   Eraser,
   TriangleAlert,
+  CalendarHeart,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -65,6 +66,7 @@ export const navGroups: NavGroup[] = [
       { to: '/more/services', icon: Scissors, labelKey: 'nav.services' },
       { to: '/more/products', icon: Package, labelKey: 'nav.products' },
       { to: '/more/hours', icon: Clock, labelKey: 'nav.hours' },
+      { to: '/more/seasons', icon: CalendarHeart, labelKey: 'nav.seasons' },
       { to: '/more/time-off', icon: CalendarOff, labelKey: 'nav.timeOff' },
       { to: '/more/breaks', icon: Coffee, labelKey: 'nav.breaks' },
     ],

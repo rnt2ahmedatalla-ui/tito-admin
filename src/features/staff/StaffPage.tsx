@@ -413,6 +413,7 @@ export function StaffPage() {
   const [form, setForm] = useState<FormState | null>(null);
   const phones = useStaffPhones();
   const logins = useStaffLogins();
+  const [toggleTarget, setToggleTarget] = useState<StaffMember | null>(null);
   const isOwnerForm = !!form?.id && !!staffQuery.data?.find((x) => x.id === form.id)?.is_owner;
   const [share, setShare] = useState<{ name: string; phone: string; user: string; pass: string } | null>(null);
   const [toDelete, setToDelete] = useState<StaffMember | null>(null);
@@ -610,11 +611,37 @@ export function StaffPage() {
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => toggle.mutate(m)}
-                  className={cn('rounded-full px-2 py-0.5 text-xs font-medium', m.is_active ? 'bg-success/10 text-success' : 'bg-sand text-ink-70')}
+                  role="switch"
+                  aria-checked={m.is_active}
+                  onClick={() => setToggleTarget(m)}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                    m.is_active ? 'border-success/40 bg-success/10 text-success' : 'border-danger/30 bg-danger/5 text-danger',
+                  )}
                 >
-                  {m.is_active ? L('شغال', 'Active') : L('موقوف', 'Paused')}
+                  <span className={cn('relative h-4 w-7 shrink-0 rounded-full transition-colors', m.is_active ? 'bg-success' : 'bg-ink-70/40')} aria-hidden>
+                    <span className={cn('absolute top-0.5 size-3 rounded-full bg-white shadow transition-all', m.is_active ? 'start-3.5' : 'start-0.5')} />
+                  </span>
+                  {m.is_active ? L('شغّال', 'Active') : L('موقوف', 'Paused')}
                 </button>
+                {toggleTarget?.id === m.id ? (
+                  <ConfirmDialog
+                    open
+                    title={m.is_active ? L(`إيقاف ${m.name}؟`, `Pause ${m.name}?`) : L(`تشغيل ${m.name}؟`, `Activate ${m.name}?`)}
+                    message={
+                      m.is_active
+                        ? L(
+                            'الزباين مش هيقدروا يحجزوا معاه ولا هيظهر في صفحة الحجز. حجوزاته القادمة بتفضل زي ما هي (لو مش هيشتغل يوم معين استخدم "ظرف طارئ"). تقدر ترجّعه في أي وقت.',
+                            'Customers can no longer book with him and he is hidden from booking. His upcoming bookings stay as they are. You can re-activate anytime.',
+                          )
+                        : L('هيظهر تاني في صفحة الحجز والزباين يقدروا يحجزوا معاه.', 'He will appear again and customers can book with him.')
+                    }
+                    confirmLabel={m.is_active ? L('إيقاف', 'Pause') : L('تشغيل', 'Activate')}
+                    loading={toggle.isPending}
+                    onConfirm={() => toggle.mutate(m, { onSettled: () => setToggleTarget(null) })}
+                    onCancel={() => setToggleTarget(null)}
+                  />
+                ) : null}
                 <button type="button" onClick={() => setScheduleFor(m)} className="rounded-full bg-sand px-2 py-0.5 text-xs font-medium text-espresso">
                   {L('جدول الشغل', 'Schedule')}
                 </button>

@@ -43,6 +43,7 @@ export function TimeOffPage() {
     end_at: '',
     reason: '',
     staff_id: '',
+    release_on: '',
   });
   const staffList = (useStaff().data ?? []).filter((m) => m.is_active);
   const ownerId = staffList.find((m) => m.is_owner)?.id ?? '';
@@ -122,9 +123,16 @@ export function TimeOffPage() {
         all_day: range.all_day,
         staff_id: form.staff_id || null,
       };
-      const { error } = editingId
-        ? await supabase.from('time_off').update(payload).eq('id', editingId)
-        : await supabase.from('time_off').insert(payload);
+      // الإجازة الموسمية: بتفتح للحجز لوحدها في التاريخ ده (محتاج features-v42.sql)
+      const full = { ...payload, release_on: form.release_on || null };
+      let { error } = editingId
+        ? await supabase.from('time_off').update(full as never).eq('id', editingId)
+        : await supabase.from('time_off').insert(full as never);
+      if (error && !form.release_on) {
+        ({ error } = editingId
+          ? await supabase.from('time_off').update(payload).eq('id', editingId)
+          : await supabase.from('time_off').insert(payload));
+      }
       if (error) throw error;
     },
     onSuccess: () => {
@@ -132,7 +140,7 @@ export function TimeOffPage() {
       void queryClient.invalidateQueries({ queryKey: ['bookings', 'today'] });
       setShowForm(false);
       setEditingId(null);
-      setForm({ all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '', staff_id: '' });
+      setForm({ all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '', staff_id: '', release_on: '' });
       setOverlapBookings([]);
       setAcknowledged(false);
       toast.success(t('app.save'));
@@ -160,7 +168,7 @@ export function TimeOffPage() {
     onError: (e) => toast.error(mapError(e, t)),
   });
 
-  const emptyForm = { all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '', staff_id: '' };
+  const emptyForm = { all_day: false, start_date: '', end_date: '', start_at: '', end_at: '', reason: '', staff_id: '', release_on: '' };
 
   const startAdd = () => {
     setEditingId(null);
@@ -182,6 +190,7 @@ export function TimeOffPage() {
       end_at: format(e, "yyyy-MM-dd'T'HH:mm"),
       reason: row.reason ?? '',
       staff_id: (row as unknown as { staff_id?: string | null }).staff_id ?? '',
+      release_on: (row as unknown as { release_on?: string | null }).release_on ?? '',
     });
     setOverlapBookings([]);
     setAcknowledged(false);
@@ -280,6 +289,19 @@ export function TimeOffPage() {
               </>
             )}
             <Input label={t('timeOff.reason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+            <div className="space-y-1 rounded-btn border border-gold/40 bg-gold/10 p-3">
+              <Input
+                type="date"
+                label={isAr ? 'إجازة موسمية: افتح الحجز للأيام دي تلقائي يوم (اختياري)' : 'Seasonal: open these days for booking automatically on (optional)'}
+                value={form.release_on}
+                onChange={(e) => setForm({ ...form, release_on: e.target.value })}
+              />
+              <p className="text-xs text-ink-70">
+                {isAr
+                  ? 'مثلًا أيام العيد: اكتب هنا تاريخ قبل العيد بـ 6 أيام. قبل التاريخ ده الزباين مش هيقدروا يحجزوا الأيام دي، وبعده بتتفتح لوحدها من غير ما تمسح الإجازة. سيبها فاضية لو إجازة عادية.'
+                  : 'E.g. for a holiday, enter a date 6 days before it. Before that date customers cannot book these days; after it they open automatically. Leave empty for a normal day off.'}
+              </p>
+            </div>
             {overlapBookings.length > 0 ? (
               <div className="space-y-2 rounded-btn bg-warning/10 p-3">
                 <p className="font-medium text-warning">{t('timeOff.overlapWarning')}</p>
@@ -341,6 +363,12 @@ export function TimeOffPage() {
                     ) : null}
                     {to.all_day ? (
                       <span className="ms-2 text-xs font-normal text-gold">{t('timeOff.allDay')}</span>
+                    ) : null}
+                    {(to as unknown as { release_on?: string | null }).release_on ? (
+                      <span className="ms-2 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                        {isAr ? 'بتفتح يوم ' : 'opens '}
+                        <span className="font-latin">{(to as unknown as { release_on?: string | null }).release_on}</span>
+                      </span>
                     ) : null}
                   </p>
                   <p className="font-latin text-sm text-ink-70">
