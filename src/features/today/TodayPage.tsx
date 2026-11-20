@@ -106,7 +106,9 @@ function layoutLanes(items: { id: string; s: number; e: number }[]) {
 
 export function TodayPage() {
   const { t, i18n } = useTranslation();
-  const readOnly = useAuth().role === 'staff';
+  const auth = useAuth();
+  const readOnly = auth.role === 'staff';
+  const myStaffId = auth.role === 'staff' ? auth.staffId : null;
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const isPhone = window.matchMedia('(max-width: 1023px)').matches;
@@ -206,7 +208,7 @@ export function TodayPage() {
   // ===== الطاقم: فلتر الحلاق + عرض أعمدة =====
   const staffAll = useStaff().data ?? [];
   const activeStaff = staffAll.filter((m) => m.is_active);
-  const showStaffUI = activeStaff.length >= 2;
+  const showStaffUI = activeStaff.length >= 2 && !readOnly;
   const badges = useMemo(() => staffBadges(staffAll), [staffAll]);
   const [staffFilter, setStaffFilter] = useState<string>('all');
   const [columnsMode, setColumnsMode] = useState<boolean>(() => {
@@ -258,16 +260,18 @@ export function TodayPage() {
   const stepDays = viewMode === 'day' ? 1 : viewMode === 'three' ? 3 : 7;
 
   const bookingsQuery = useQuery({
-    queryKey: ['bookings', 'today', bounds.start, bounds.end],
+    queryKey: ['bookings', 'today', bounds.start, bounds.end, myStaffId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('bookings')
         .select(
           '*, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(*), extras:booking_extras(id, name_ar, name_en, price_egp)',
         )
         .gte('start_at', bounds.start)
-        .lte('start_at', bounds.end)
-        .order('start_at', { ascending: true });
+        .lte('start_at', bounds.end);
+      // الحلاق: حجوزاته هو بس (حتى لو الصلاحيات في قاعدة البيانات أوسع)
+      if (myStaffId) q = q.eq('staff_id', myStaffId);
+      const { data, error } = await q.order('start_at', { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as BookingWithRelations[];
     },
