@@ -9,10 +9,11 @@ import { Input } from '@/components/ui/Input';
 import { useStaff } from '@/features/staff/StaffPage';
 import { rpcUntyped } from '@/features/staff/staffLogin';
 import { formatEGP } from '@/lib/money';
-import { cairoDateString } from '@/lib/time';
+import { cairoDateString, formatCairoDateShort } from '@/lib/time';
 import { cn } from '@/lib/cn';
 
-type Preview = { bookings: number; revenue: number; payments: number };
+type Preview = { bookings: number; revenue: number; payments: number; by_status?: Record<string, number>; first?: string | null; last?: string | null };
+const STATUS_AR: Record<string, string> = { completed: 'تمت', confirmed: 'مؤكد (لسه متعلّم تمت)', cancelled: 'ملغي', expired: 'انتهت مهلة الدفع', no_show: 'ما حضرش', pending_payment: 'مستني دفع' };
 
 /** تنظيف حجوزات ودخل الأيام اللي فاتت (لكل حلاق أو للكل). مبيلمسش العملاء ولا الخدمات ولا الإعدادات ولا التقييمات ولا المصروفات */
 export function CleanupPage() {
@@ -121,6 +122,23 @@ export function CleanupPage() {
                 {' · '}
                 {L('دفعات:', 'Payments:')} <span className="font-latin font-bold">{preview.payments}</span>
               </p>
+              {preview.by_status && Object.keys(preview.by_status).length > 0 ? (
+                <ul className="flex flex-wrap gap-1.5 text-xs">
+                  {Object.entries(preview.by_status).map(([k, v]) => (
+                    <li key={k} className="rounded-full bg-sand px-2.5 py-1">
+                      {isAr ? (STATUS_AR[k] ?? k) : k}: <span className="font-latin font-bold">{v}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {preview.first && preview.last ? (
+                <p className="text-xs text-ink-70">
+                  {L('من ', 'From ')}
+                  <span className="font-latin">{formatCairoDateShort(preview.first)}</span>
+                  {L(' لحد ', ' to ')}
+                  <span className="font-latin">{formatCairoDateShort(preview.last)}</span>
+                </p>
+              ) : null}
               <Button variant="danger" disabled={preview.bookings === 0} onClick={() => setConfirmOpen(true)}>
                 {L('امسح', 'Delete')}
               </Button>

@@ -19,7 +19,9 @@ import { useWaitlistCount } from '@/features/extras/useWaitlistCount';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
 import { setLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { rpcUntyped } from '@/features/staff/staffLogin';
 import { useUnreadBookingCount } from '@/hooks/useBookingLog';
 import { useGlobalShortcuts } from '@/hooks/useKeyboardShortcuts';
 
@@ -55,6 +57,13 @@ function SidebarAction({
 
 export function AppShell() {
   const { t, i18n } = useTranslation();
+  const appQc = useQueryClient();
+  // الحجوزات اللي عدّى وقتها بتتحسب "تم" لوحدها لو الأدمن فعّل ده (من الإضافات)
+  useEffect(() => {
+    void rpcUntyped('auto_complete_bookings').then((r) => {
+      if (!r.error && Number(r.data) > 0) void appQc.invalidateQueries({ queryKey: ['bookings'] });
+    });
+  }, [appQc]);
   const { signOut } = useAuth();
   const { data: paymentsCount = 0 } = usePaymentsCount();
   const { data: remindersCount = 0 } = useUnreadBookingCount();

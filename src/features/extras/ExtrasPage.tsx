@@ -78,6 +78,7 @@ function Toggles() {
   const [days, setDays] = useState<string | null>(null);
   const [prepay, setPrepay] = useState<string | null>(null);
   const [win, setWin] = useState<string | null>(null);
+  const [auto, setAuto] = useState<string | null>(null);
   const saveNum = (key: string, raw: string, min: number, max: number) => {
     const n = Math.round(Number(raw));
     if (!(n >= min && n <= max)) {
@@ -150,6 +151,28 @@ function Toggles() {
               />
             </div>
             <Button variant="secondary" loading={save.isPending} onClick={() => saveNum('wait_window_hours', win ?? String(f?.waitWindowHours ?? 3), 1, 12)}>
+              {L('حفظ', 'Save')}
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2 p-4">
+          <p className="font-semibold text-espresso">{L('اعتبار الحجز "تم" تلقائي', 'Mark bookings "done" automatically')}</p>
+          <p className="text-xs text-ink-70">
+            {L(
+              'لو مش بتدوس "تمت" على الحجز بعد الحلاقة، اكتب هنا بعد كام ساعة من نهاية الميعاد النظام يعتبره تم لوحده. ده بيظبط الإيراد والتقارير وعدّاد "آخر حلاقة" وطلب التقييم. اللي ما حضرش علّمه "ما حضرش" قبل كده. اكتب 0 لو عايز تقفلها. (من 0 لـ 72)',
+              'If you do not press "done", bookings are marked done this many hours after their end time. This fixes income, reports, the last-cut counter and rating requests. Mark no-shows before that. 0 = off. (0 to 72)',
+            )}
+          </p>
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                label={L('بعد كام ساعة', 'After how many hours')}
+                inputMode="numeric"
+                value={auto ?? String(f?.autoCompleteHours ?? 0)}
+                onChange={(e) => setAuto(e.target.value)}
+              />
+            </div>
+            <Button variant="secondary" loading={save.isPending} onClick={() => saveNum('auto_complete_hours', auto ?? String(f?.autoCompleteHours ?? 0), 0, 72)}>
               {L('حفظ', 'Save')}
             </Button>
           </div>
