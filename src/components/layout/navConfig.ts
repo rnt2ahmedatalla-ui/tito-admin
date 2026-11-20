@@ -36,21 +36,15 @@ export const navGroups: NavGroup[] = [
       { to: '/', icon: Calendar, labelKey: 'nav.today' },
       { to: '/routine', icon: ClipboardCheck, labelKey: 'nav.routine', badge: 'routine' },
       { to: '/more/walk-in', icon: UserPlus, labelKey: 'nav.walkIn' },
-    ],
-  },
-  {
-    id: 'money',
-    titleKey: 'nav.groupMoney',
-    items: [
-      { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
+      { to: '/more/emergency', icon: TriangleAlert, labelKey: 'nav.emergency' },
     ],
   },
   {
     id: 'customers',
     titleKey: 'nav.groupCustomers',
     items: [
-      { to: '/more/customers', icon: Users, labelKey: 'nav.customers' },
       { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
+      { to: '/more/customers', icon: Users, labelKey: 'nav.customers' },
       { to: '/more/reviews', icon: Star, labelKey: 'nav.reviews' },
       { to: '/more/loyalty', icon: Gift, labelKey: 'nav.loyalty' },
       { to: '/more/coupons', icon: Ticket, labelKey: 'nav.coupons' },
@@ -61,14 +55,26 @@ export const navGroups: NavGroup[] = [
     id: 'shop',
     titleKey: 'nav.groupShop',
     items: [
-      { to: '/more/emergency', icon: TriangleAlert, labelKey: 'nav.emergency' },
       { to: '/more/staff', icon: UserRound, labelKey: 'nav.staff' },
       { to: '/more/services', icon: Scissors, labelKey: 'nav.services' },
       { to: '/more/products', icon: Package, labelKey: 'nav.products' },
+    ],
+  },
+  {
+    id: 'schedule',
+    titleKey: 'nav.groupSchedule',
+    items: [
       { to: '/more/hours', icon: Clock, labelKey: 'nav.hours' },
-      { to: '/more/seasons', icon: CalendarHeart, labelKey: 'nav.seasons' },
-      { to: '/more/time-off', icon: CalendarOff, labelKey: 'nav.timeOff' },
       { to: '/more/breaks', icon: Coffee, labelKey: 'nav.breaks' },
+      { to: '/more/time-off', icon: CalendarOff, labelKey: 'nav.timeOff' },
+      { to: '/more/seasons', icon: CalendarHeart, labelKey: 'nav.seasons' },
+    ],
+  },
+  {
+    id: 'money',
+    titleKey: 'nav.groupMoney',
+    items: [
+      { to: '/more/finance', icon: Wallet, labelKey: 'nav.finance' },
     ],
   },
   {
@@ -76,9 +82,9 @@ export const navGroups: NavGroup[] = [
     titleKey: 'nav.groupSystem',
     items: [
       { to: '/more/settings', icon: Settings, labelKey: 'nav.settings' },
+      { to: '/more/maintenance', icon: Wrench, labelKey: 'nav.maintenance' },
       { to: '/more/backup', icon: DatabaseBackup, labelKey: 'nav.backup' },
       { to: '/more/audit', icon: History, labelKey: 'nav.audit' },
-      { to: '/more/maintenance', icon: Wrench, labelKey: 'nav.maintenance' },
       { to: '/more/cleanup', icon: Eraser, labelKey: 'nav.cleanup' },
     ],
   },
