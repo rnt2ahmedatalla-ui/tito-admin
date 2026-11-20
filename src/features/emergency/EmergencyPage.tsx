@@ -27,9 +27,10 @@ type Row = {
   service_name_ar: string | null;
   service_name_en: string | null;
   profile: { full_name: string | null; phone: string | null } | null;
-  payment: { status: string | null } | Array<{ status: string | null }> | null;
+  payment: PayRow | PayRow[] | null;
 };
 
+type PayRow = { status: string | null; method: string | null; amount_egp: number | null };
 type QueueItem = { id: string; name: string; phone: string; msg: string; kind: 'move' | 'cancel'; sent: boolean };
 
 const DEFAULT_MOVE_AR =
@@ -75,7 +76,6 @@ export function EmergencyPage() {
   const [date, setDate] = useState(() => cairoDateString(new Date()));
   const [scope, setScope] = useState<string>('all');
   const [reason, setReason] = useState('');
-  const [closed, setClosed] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -91,7 +91,7 @@ export function EmergencyPage() {
       let q = untypedDb
         .from('bookings')
         .select(
-          'id, start_at, end_at, service_id, staff_id, status, move_status, move_start_at, price_egp, service_name_ar, service_name_en, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(status)',
+          'id, start_at, end_at, service_id, staff_id, status, move_status, move_start_at, price_egp, service_name_ar, service_name_en, profile:profiles!bookings_user_id_fkey(full_name, phone), payment:payments(status, method, amount_egp)',
         )
         .gte('start_at', bounds.start)
         .lte('start_at', bounds.end)
@@ -106,9 +106,51 @@ export function EmergencyPage() {
   const active = all.filter((r) => r.status !== 'cancelled');
   const cancelled = all.filter((r) => r.status === 'cancelled');
   const staffName = (id: string | null) => (id ? (staff.find((m) => m.id === id)?.name ?? '') : '');
-  const payStatus = (r: Row): string | null => {
-    const p = Array.isArray(r.payment) ? r.payment[0] : r.payment;
-    return p?.status ?? null;
+  // فلوس اتدفعت أونلاين فعلاً (الدفع في المحل مش بيتحسب)
+  const onlinePaid = (r: Row): { amount: number; confirmed: boolean } | null => {
+    const arr = Array.isArray(r.payment) ? r.payment : r.payment ? [r.payment] : [];
+    const p = arr.find((x) => x.method && x.method !== 'pay_at_shop' && (x.status === 'confirmed' || x.status === 'submitted'));
+    return p ? { amount: Number(p.amount_egp ?? r.price_egp ?? 0), confirmed: p.status === 'confirmed' } : null;
+  };
+
+  // اليوم مقفول؟ (قفل "ظرف طارئ" أو إجازة اليوم كله) مع إمكانية الرجوع
+  const closureQ = useQuery({
+    queryKey: ['emergency-closure', date, scope],
+    queryFn: async (): Promise<Array<{ id: string; reason: string | null }>> => {
+      let q = untypedDb.from('time_off').select('id, reason, staff_id').eq('all_day', true).gte('start_at', bounds.start).lte('start_at', bounds.end);
+      q = scope === 'all' ? q.is('staff_id', null) : q.eq('staff_id', scope);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; reason: string | null }>;
+    },
+  });
+  const closures = closureQ.data ?? [];
+  const closed = closures.length > 0;
+
+  const reopenDay = async () => {
+    setBusy(true);
+    try {
+      const { error } = await untypedDb.from('time_off').delete().in('id', closures.map((c) => c.id));
+      if (error) throw error;
+      toast.success(L('رجّعت فتح اليوم، الحجز رجع متاح', 'Day re-opened'));
+      void closureQ.refetch();
+      void qc.invalidateQueries({ queryKey: ['time-off'] });
+      void qc.invalidateQueries({ queryKey: ['bookings', 'today'] });
+    } catch (e) {
+      toast.error(L('معرفتش أفتح اليوم: ', 'Could not re-open: ') + (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const undoMove = async (id: string) => {
+    const res = await rpcUntyped('admin_cancel_booking_move', { p_booking_id: id });
+    if (res.error) toast.error(res.error.message);
+    else {
+      toast.success(L('اتلغى اقتراح المعاد، حجزه زي ما هو', 'Suggestion withdrawn'));
+      setQueue((q) => q.filter((x) => x.id !== id));
+      void rowsQ.refetch();
+    }
   };
 
   const toggle = (id: string) =>
@@ -132,7 +174,7 @@ export function EmergencyPage() {
         staff_id: scope === 'all' ? null : scope,
       });
       if (error) throw error;
-      setClosed(true);
+      void closureQ.refetch();
       toast.success(L('اليوم اتقفل، محدش هيقدر يحجز فيه', 'Day closed, nobody can book it'));
       void qc.invalidateQueries({ queryKey: ['time-off'] });
       void qc.invalidateQueries({ queryKey: ['bookings', 'today'] });
@@ -249,78 +291,95 @@ export function EmergencyPage() {
     setQueue((q) => q.map((x) => (x.id === next.id ? { ...x, sent: true } : x)));
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <TriangleAlert className="size-6 text-danger" aria-hidden />
-        <h1 className="text-xl font-bold text-espresso">{L('ظرف طارئ', 'Emergency')}</h1>
-      </div>
-      <p className="text-sm text-ink-70">
-        {L(
-          'لو حصل ظرف ومش هتقدر تشتغل: اقفل اليوم، وبعدين ابعت لكل زبون اقتراح معاد جديد أو اعتذار. الرسايل بتتبعت من الواتساب بتاعك بضغطة لكل زبون.',
-          'If something comes up: close the day, then send each customer a new-time suggestion or an apology via WhatsApp.',
-        )}
-      </p>
+  const stepBadge = (n: number) => (
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-espresso font-latin text-sm font-bold text-cream">{n}</span>
+  );
+  const chip = (on: boolean) =>
+    cn(
+      'rounded-full border px-3.5 py-1.5 text-sm transition-colors',
+      on ? 'border-gold bg-gold/20 font-semibold text-espresso' : 'border-bark/20 bg-white text-ink-70 hover:bg-sand/50',
+    );
 
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-5 pb-24">
+      <div className="flex items-start gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-danger/10">
+          <TriangleAlert className="size-6 text-danger" aria-hidden />
+        </span>
+        <div>
+          <h1 className="text-xl font-bold text-espresso">{L('ظرف طارئ', 'Emergency')}</h1>
+          <p className="mt-0.5 text-sm text-ink-70">
+            {L(
+              'اقفل اليوم، وبعدين ابعت لكل زبون اقتراح معاد جديد أو اعتذار. الرسايل بتتبعت من واتساب بتاعك بضغطة لكل زبون.',
+              'Close the day, then send each customer a new time or an apology on WhatsApp.',
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* 1) اليوم والمكان */}
       <Card>
-        <CardBody className="space-y-3">
-          <p className="font-semibold text-espresso">{L('1) اليوم والمكان', '1) Day and scope')}</p>
-          <div className="flex flex-wrap items-center gap-2">
+        <CardBody className="space-y-4">
+          <div className="flex items-center gap-2.5">
+            {stepBadge(1)}
+            <p className="font-semibold text-espresso">{L('اليوم والمكان', 'Day and scope')}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
             <input
               type="date"
               value={date}
               onChange={(e) => {
                 setDate(e.target.value);
                 setSel(new Set());
-                setClosed(false);
               }}
               className="min-h-11 rounded-btn border border-bark/20 bg-white px-3 font-latin text-espresso"
             />
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={120}
+              placeholder={L('السبب (بيتسجل عندك بس): تعب، ظرف عائلي…', 'Reason (only you see it)')}
+              className="min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-espresso"
+            />
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setScope('all');
-                setClosed(false);
-              }}
-              className={cn('rounded-full border px-3 py-1.5 text-sm', scope === 'all' ? 'border-gold bg-gold/15 font-semibold' : 'border-bark/20 bg-white')}
-            >
+            <button type="button" onClick={() => setScope('all')} className={chip(scope === 'all')}>
               {L('المحل كله', 'Whole shop')}
             </button>
             {staff.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => {
-                  setScope(m.id);
-                  setClosed(false);
-                }}
-                className={cn('rounded-full border px-3 py-1.5 text-sm', scope === m.id ? 'border-gold bg-gold/15 font-semibold' : 'border-bark/20 bg-white')}
-              >
+              <button key={m.id} type="button" onClick={() => setScope(m.id)} className={chip(scope === m.id)}>
                 {m.name}
               </button>
             ))}
           </div>
-          <input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            maxLength={120}
-            placeholder={L('السبب (يتسجل عندك بس): تعب، ظرف عائلي…', 'Reason (only you see it)')}
-            className="min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-espresso"
-          />
-          <Button variant={closed ? 'secondary' : 'danger'} loading={busy} disabled={closed} onClick={() => void closeDay()}>
-            {closed ? L('اليوم مقفول ✓', 'Day closed ✓') : L('اقفل اليوم (محدش يحجز فيه)', 'Close the day (no new bookings)')}
-          </Button>
+          {closed ? (
+            <div className="flex flex-col gap-3 rounded-card border border-success/30 bg-success/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-medium text-success">
+                {L('اليوم مقفول، محدش يقدر يحجز فيه', 'Day is closed — no new bookings')}
+                {closures[0]?.reason ? <span className="block text-xs font-normal text-ink-70">{closures[0].reason}</span> : null}
+              </p>
+              <Button variant="secondary" loading={busy} onClick={() => void reopenDay()}>
+                {L('ارجع افتح اليوم', 'Re-open the day')}
+              </Button>
+            </div>
+          ) : (
+            <Button variant="danger" className="w-full sm:w-auto" loading={busy} onClick={() => void closeDay()}>
+              {L('اقفل اليوم (محدش يحجز فيه)', 'Close the day (no new bookings)')}
+            </Button>
+          )}
         </CardBody>
       </Card>
 
+      {/* 2) الحجوزات */}
       <Card>
         <CardBody className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold text-espresso">
-              {L('2) الحجوزات المتأثرة', '2) Affected bookings')} ({active.length})
-            </p>
+            <div className="flex items-center gap-2.5">
+              {stepBadge(2)}
+              <p className="font-semibold text-espresso">
+                {L('الحجوزات المتأثرة', 'Affected bookings')} <span className="font-latin text-ink-70">({active.length})</span>
+              </p>
+            </div>
             {active.length > 0 ? (
               <Button size="sm" variant="ghost" onClick={() => setSel(sel.size === active.length ? new Set() : new Set(active.map((r) => r.id)))}>
                 {sel.size === active.length ? L('إلغاء التحديد', 'Clear') : L('اختار الكل', 'Select all')}
@@ -329,68 +388,82 @@ export function EmergencyPage() {
           </div>
           {rowsQ.isLoading ? <p className="text-sm text-ink-70">…</p> : null}
           {!rowsQ.isLoading && active.length === 0 ? (
-            <p className="text-sm text-ink-70">{L('مفيش حجوزات مؤكدة في اليوم ده.', 'No active bookings on this day.')}</p>
+            <p className="rounded-card bg-sand/50 p-4 text-center text-sm text-ink-70">{L('مفيش حجوزات مؤكدة في اليوم ده.', 'No active bookings on this day.')}</p>
           ) : null}
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {active.map((r) => {
               const i = info(r);
               const moved = r.move_status === 'pending' && r.move_start_at;
+              const on = sel.has(r.id);
               return (
-                <li key={r.id} className="flex items-start gap-3 rounded-card border border-default bg-white p-3">
-                  <input type="checkbox" className="mt-1 size-5 accent-gold" checked={sel.has(r.id)} onChange={() => toggle(r.id)} aria-label={i.name} />
-                  <div className="min-w-0 flex-1 text-sm">
-                    <p className="font-semibold text-espresso">
-                      <span className="font-latin">{i.time}</span> · {i.name || '—'}
-                    </p>
-                    <p className="text-ink-70">
-                      {isAr ? r.service_name_ar : r.service_name_en}
-                      {staffName(r.staff_id) ? ` · ${staffName(r.staff_id)}` : ''}
-                    </p>
-                    {moved ? (
-                      <p className="mt-1 text-xs font-medium text-warning">
-                        {L('مستني رده على معاد جديد: ', 'Waiting for reply: ')}
-                        {formatCairoDateShort(r.move_start_at!)} {formatCairoTime(r.move_start_at!, locale)}
+                <li key={r.id} className={cn('rounded-card border bg-white p-3 transition-colors sm:p-4', on ? 'border-gold ring-1 ring-gold' : 'border-default')}>
+                  <div className="flex items-start gap-3">
+                    <input type="checkbox" className="mt-2 size-5 shrink-0 accent-gold" checked={on} onChange={() => toggle(r.id)} aria-label={i.name} />
+                    <span className="shrink-0 rounded-btn bg-sand px-2.5 py-1.5 text-center font-latin text-sm font-bold text-espresso">{i.time}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-espresso">{i.name || '—'}</p>
+                      <p className="truncate text-sm text-ink-70">
+                        {isAr ? r.service_name_ar : r.service_name_en}
+                        {staffName(r.staff_id) ? ` · ${staffName(r.staff_id)}` : ''}
                       </p>
-                    ) : null}
+                      {moved ? (
+                        <p className="mt-1.5 inline-flex flex-wrap items-center gap-2 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                          {L('مستني رده على: ', 'Waiting for reply: ')}
+                          <span className="font-latin">
+                            {formatCairoDateShort(r.move_start_at!)} {formatCairoTime(r.move_start_at!, locale)}
+                          </span>
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 flex-col gap-1">
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-default pt-3">
                     <Button size="sm" variant="secondary" disabled={busy} onClick={() => void runMove([r])}>
-                      {L('معاد جديد', 'Move')}
+                      {L('اقترح معاد جديد', 'Suggest new time')}
                     </Button>
-                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => void runCancel([r])}>
-                      {L('إلغاء', 'Cancel')}
+                    <Button size="sm" variant="ghost" className="text-danger" disabled={busy} onClick={() => void runCancel([r])}>
+                      {L('إلغاء واعتذار', 'Cancel & apologise')}
                     </Button>
+                    {moved ? (
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => void undoMove(r.id)}>
+                        {L('سحب الاقتراح', 'Withdraw')}
+                      </Button>
+                    ) : null}
                   </div>
                 </li>
               );
             })}
           </ul>
-          {chosen.length > 0 ? (
-            <div className="sticky bottom-20 z-10 flex flex-col gap-2 rounded-card border border-gold bg-cream p-3 shadow-lg sm:flex-row">
-              <Button className="flex-1" variant="primary" loading={busy} onClick={() => void runMove(chosen)}>
-                {L(`اقترح معاد جديد للمحدد (${chosen.length})`, `Suggest new time (${chosen.length})`)}
-              </Button>
-              <Button className="flex-1" variant="danger" loading={busy} onClick={() => void runCancel(chosen)}>
-                {L(`إلغاء المحدد مع اعتذار (${chosen.length})`, `Cancel & apologise (${chosen.length})`)}
-              </Button>
-            </div>
-          ) : null}
         </CardBody>
       </Card>
 
+      {chosen.length > 0 ? (
+        <div className="fixed inset-x-3 bottom-20 z-20 mx-auto flex max-w-3xl flex-col gap-2 rounded-card border border-gold bg-cream p-3 shadow-xl sm:flex-row lg:bottom-6">
+          <Button className="flex-1" variant="primary" loading={busy} onClick={() => void runMove(chosen)}>
+            {L(`اقترح معاد جديد للمحدد (${chosen.length})`, `Suggest new time (${chosen.length})`)}
+          </Button>
+          <Button className="flex-1" variant="danger" loading={busy} onClick={() => void runCancel(chosen)}>
+            {L(`إلغاء المحدد مع اعتذار (${chosen.length})`, `Cancel & apologise (${chosen.length})`)}
+          </Button>
+        </div>
+      ) : null}
+
+      {/* 3) الرسايل */}
       {queue.length > 0 ? (
         <Card>
           <CardBody className="space-y-3">
-            <p className="font-semibold text-espresso">
-              {L('3) ابعت الرسايل', '3) Send messages')} ({queue.length - pending.length}/{queue.length})
-            </p>
+            <div className="flex items-center gap-2.5">
+              {stepBadge(3)}
+              <p className="font-semibold text-espresso">
+                {L('ابعت الرسايل', 'Send messages')} <span className="font-latin text-ink-70">({queue.length - pending.length}/{queue.length})</span>
+              </p>
+            </div>
             {next ? (
-              <div className="space-y-2 rounded-card border border-gold bg-gold/10 p-3">
+              <div className="space-y-3 rounded-card border border-gold bg-gold/10 p-3">
                 <p className="text-sm font-semibold text-espresso">
                   {next.name} · {next.kind === 'move' ? L('اقتراح معاد', 'New time') : L('اعتذار', 'Apology')}
                 </p>
-                <p className="whitespace-pre-line text-sm text-ink-70">{next.msg}</p>
-                <div className="flex gap-2">
+                <p className="whitespace-pre-line rounded-btn bg-white p-3 text-sm text-ink-70">{next.msg}</p>
+                <div className="flex flex-wrap gap-2">
                   <Button variant="primary" onClick={sendNext}>
                     {L('ابعت واتساب', 'Send WhatsApp')}
                   </Button>
@@ -400,12 +473,14 @@ export function EmergencyPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm font-medium text-success">{L('خلصت كل الرسايل ✓', 'All messages sent ✓')}</p>
+              <p className="rounded-card bg-success/10 p-3 text-center text-sm font-medium text-success">{L('خلصت كل الرسايل ✓', 'All messages sent ✓')}</p>
             )}
-            <ul className="space-y-1 text-sm">
+            <ul className="divide-y divide-default text-sm">
               {queue.map((q) => (
-                <li key={q.id} className={cn('flex justify-between', q.sent ? 'text-ink-70' : 'font-medium text-espresso')}>
-                  <span>{q.name}</span>
+                <li key={q.id} className={cn('flex items-center justify-between py-1.5', q.sent ? 'text-ink-70' : 'font-medium text-espresso')}>
+                  <span>
+                    {q.name} <span className="text-xs text-ink-70">· {q.kind === 'move' ? L('معاد جديد', 'new time') : L('اعتذار', 'apology')}</span>
+                  </span>
                   <span>{q.sent ? '✓' : '…'}</span>
                 </li>
               ))}
@@ -414,31 +489,43 @@ export function EmergencyPage() {
         </Card>
       ) : null}
 
+      {/* اللي اتلغى */}
       {cancelled.length > 0 ? (
         <Card>
           <CardBody className="space-y-2">
-            <p className="font-semibold text-espresso">{L('اتلغت في اليوم ده', 'Cancelled that day')} ({cancelled.length})</p>
-            <ul className="space-y-1 text-sm">
+            <p className="font-semibold text-espresso">
+              {L('اتلغت في اليوم ده', 'Cancelled that day')} <span className="font-latin text-ink-70">({cancelled.length})</span>
+            </p>
+            <ul className="divide-y divide-default text-sm">
               {cancelled.map((r) => {
-                const ps = payStatus(r);
+                const paid = onlinePaid(r);
                 return (
-                  <li key={r.id} className="flex flex-wrap justify-between gap-2">
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                     <span>
-                      <span className="font-latin">{formatCairoTime(r.start_at, locale)}</span> · {r.profile?.full_name ?? '—'}
+                      <span className="font-latin font-semibold">{formatCairoTime(r.start_at, locale)}</span> · {r.profile?.full_name ?? '—'}
                     </span>
-                    {ps ? <span className="text-xs font-medium text-warning">{L('راجع رد الفلوس', 'Check refund')} ({ps})</span> : null}
+                    {paid ? (
+                      <span className="rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                        {paid.confirmed
+                          ? L(`دفع أونلاين ${paid.amount} ج — رجّعله فلوسه`, `Paid online ${paid.amount} EGP — refund him`)
+                          : L(`بعت إيصال ${paid.amount} ج ولسه متأكدش`, `Receipt sent ${paid.amount} EGP, not confirmed`)}
+                      </span>
+                    ) : null}
                   </li>
                 );
               })}
             </ul>
+            <p className="text-xs text-ink-70">{L('الدفع في المحل مش بيتحسب هنا لأن مفيش فلوس اتدفعت.', 'Pay-at-shop bookings need no refund.')}</p>
           </CardBody>
         </Card>
       ) : null}
 
+      {/* نص الرسايل */}
       <Card>
         <CardBody className="space-y-3">
-          <button type="button" className="w-full text-start font-semibold text-espresso" onClick={() => setShowMsgs((v) => !v)}>
-            {L('نص الرسايل (تقدر تعدله)', 'Message text (editable)')} {showMsgs ? '▲' : '▼'}
+          <button type="button" className="flex w-full items-center justify-between text-start font-semibold text-espresso" onClick={() => setShowMsgs((v) => !v)}>
+            <span>{L('نص الرسايل (تقدر تعدله)', 'Message text (editable)')}</span>
+            <span aria-hidden>{showMsgs ? '▲' : '▼'}</span>
           </button>
           {showMsgs ? (
             <div className="space-y-3">

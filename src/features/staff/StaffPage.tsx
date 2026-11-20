@@ -12,7 +12,7 @@ import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { cn } from '@/lib/cn';
 import { StaffAccessCard } from './StaffAccessCard';
 import { StaffEarnings } from './StaffEarnings';
-import { loginMessage, rpcUntyped as loginRpc, saveStaffPhone, useStaffPhones, waLink } from './staffLogin';
+import { loginMessage, rpcUntyped as loginRpc, saveStaffLoginPass, saveStaffPhone, useStaffLogins, useStaffPhones, waLink } from './staffLogin';
 
 export interface StaffMember {
   id: string;
@@ -412,6 +412,7 @@ export function StaffPage() {
   const [servicesFor, setServicesFor] = useState<StaffMember | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const phones = useStaffPhones();
+  const logins = useStaffLogins();
   const isOwnerForm = !!form?.id && !!staffQuery.data?.find((x) => x.id === form.id)?.is_owner;
   const [share, setShare] = useState<{ name: string; phone: string; user: string; pass: string } | null>(null);
   const [toDelete, setToDelete] = useState<StaffMember | null>(null);
@@ -469,6 +470,12 @@ export function StaffPage() {
         const r = await loginRpc('admin_set_staff_login', { p_staff: staffId, p_username: f.username, p_password: f.password });
         if (r.error) return fail(r.error);
         loginDone = true;
+        try {
+          await saveStaffLoginPass(staffId, f.password);
+        } catch {
+          /* لو ملف features-v40.sql لسه متشغلش مش مشكلة، بس الباسورد مش هيتحفظ للعرض */
+        }
+        void queryClient.invalidateQueries({ queryKey: ['staff-logins'] });
       }
       return { phoneErr, loginDone, name: f.name.trim(), phone: f.phone.trim(), user: f.username.trim().toLowerCase(), pass: f.password };
     },
@@ -625,7 +632,7 @@ export function StaffPage() {
                 <button
                   type="button"
                   aria-label={L('تعديل', 'Edit')}
-                  onClick={() => setForm({ id: m.id, name: m.name, bio: m.bio ?? '', bioEn: m.bio_en ?? '', socials: m.socials ?? {}, years: m.experience_years?.toString() ?? '', photo: m.photo ?? '', phone: phones.data?.[m.id] ?? '', username: '', password: '' })}
+                  onClick={() => setForm({ id: m.id, name: m.name, bio: m.bio ?? '', bioEn: m.bio_en ?? '', socials: m.socials ?? {}, years: m.experience_years?.toString() ?? '', photo: m.photo ?? '', phone: phones.data?.[m.id] ?? '', username: logins.data?.[m.id]?.username ?? '', password: logins.data?.[m.id]?.password ?? '' })}
                   className="flex size-9 items-center justify-center rounded-btn hover:bg-sand"
                 >
                   <Pencil className="size-4" aria-hidden />

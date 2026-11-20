@@ -31,10 +31,41 @@ export function useStaffPhones() {
   });
 }
 
+/** بيانات دخول الحلاقين (اسم المستخدم من الحساب، والباسورد اللي انت حطيته آخر مرة) — للأدمن بس */
+export function useStaffLogins() {
+  return useQuery({
+    queryKey: ['staff-logins'],
+    retry: false,
+    staleTime: 30_000,
+    queryFn: async (): Promise<Record<string, { username: string; password: string }>> => {
+      const map: Record<string, { username: string; password: string }> = {};
+      const u = await rpcUntyped('admin_staff_usernames');
+      if (!u.error) {
+        ((u.data ?? []) as Array<{ staff_id: string; username: string }>).forEach((r) => {
+          map[r.staff_id] = { username: r.username, password: '' };
+        });
+      }
+      const p = await untypedDb.from('staff_private').select('staff_id, login_pass');
+      if (!p.error) {
+        ((p.data ?? []) as Array<{ staff_id: string; login_pass: string | null }>).forEach((r) => {
+          if (r.login_pass) map[r.staff_id] = { username: map[r.staff_id]?.username ?? '', password: r.login_pass };
+        });
+      }
+      return map;
+    },
+  });
+}
+
+export async function saveStaffLoginPass(staffId: string, pass: string): Promise<void> {
+  const { error } = await untypedDb.from('staff_private').upsert({ staff_id: staffId, login_pass: pass }, { onConflict: 'staff_id' });
+  if (error) throw error;
+}
+
 export async function saveStaffPhone(staffId: string, phone: string): Promise<void> {
   const clean = phone.trim();
   if (!clean) {
-    await untypedDb.from('staff_private').delete().eq('staff_id', staffId);
+    // بنفضّي الرقم بس (من غير ما نمسح الصف عشان بيانات الدخول تفضل)
+    await untypedDb.from('staff_private').update({ phone: null }).eq('staff_id', staffId);
     return;
   }
   const { error } = await untypedDb.from('staff_private').upsert({ staff_id: staffId, phone: clean }, { onConflict: 'staff_id' });
