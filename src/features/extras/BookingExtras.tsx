@@ -1,9 +1,9 @@
+import { waLink } from '@/features/staff/staffLogin';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { MessageCircle, Star } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
-import { buildWhatsAppUrl } from '@/lib/whatsapp';
 
 const CUSTOMER_BASE_URL = (import.meta.env.VITE_CUSTOMER_URL || 'https://tito-customer.vercel.app').replace(/\/+$/, '');
 
@@ -49,16 +49,20 @@ export function CustomerFlags({ userId }: { userId: string }) {
   );
 }
 
+export function rateMessage(name: string, token: string, isAr: boolean): string {
+  const link = `${CUSTOMER_BASE_URL}/rate/${token}`;
+  return isAr
+    ? `أهلاً ${name} 🙏\nنورتنا! رأيك يهمنا، قيّم حلاقتك في ثانيتين:\n${link}`
+    : `Hi ${name} 🙏\nThanks for visiting! Rate your cut in two seconds:\n${link}`;
+}
+
 /** بعد الحلاقة: رسالة واتساب جاهزة فيها لينك التقييم */
 export function RateRequest({ rateToken, phone, name }: { rateToken: string | null | undefined; phone: string; name: string }) {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
   if (!rateToken) return null;
-  const link = `${CUSTOMER_BASE_URL}/rate/${rateToken}`;
-  const msg = isAr
-    ? `أهلاً ${name} 🙏\nنورتنا! رأيك يهمنا، قيّم حلاقتك في ثانيتين:\n${link}`
-    : `Hi ${name} 🙏\nThanks for visiting! Rate your cut in two seconds:\n${link}`;
-  const url = phone ? buildWhatsAppUrl(phone, msg) : null;
+  const msg = rateMessage(name, rateToken, !!isAr);
+  const url = phone ? waLink(phone, msg) : null;
   if (!url) return null;
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block">
