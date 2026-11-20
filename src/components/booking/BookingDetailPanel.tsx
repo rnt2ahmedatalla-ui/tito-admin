@@ -1,3 +1,4 @@
+import { fetchSlots } from '@/lib/slots';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -186,18 +187,14 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
     onError: (e) => toast.error(mapError(e, t)),
   });
 
-  const loadMoveSlots = async (serviceId: string) => {
+  const loadMoveSlots = async (serviceId: string, staffId: string | null, durationMin: number | null) => {
     if (!moveDate || !serviceId) return;
-    const { data, error } = await supabase.rpc('get_available_slots', {
-      p_date: moveDate,
-      p_service_id: serviceId,
-    });
-    if (error) {
-      toast.error(mapError(error, t));
+    const r = await fetchSlots({ serviceId, date: moveDate, staffId, durationMin });
+    if (r.error) {
+      toast.error(mapError(new Error(r.error), t));
       return;
     }
-    const list = (data as Array<{ start_at: string }> | null) ?? [];
-    const starts = list.map((row) => row.start_at).filter(Boolean);
+    const starts = r.starts;
     setMoveSlots(starts);
     setMoveSlot('');
     if (starts.length === 0) toast.message(t('booking.moveNoSlots'));
@@ -546,7 +543,7 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
               value={moveDate}
               onChange={(e) => setMoveDate(e.target.value)}
             />
-            <Button className="mt-3" variant="secondary" onClick={() => void loadMoveSlots(b.service_id)}>
+            <Button className="mt-3" variant="secondary" onClick={() => void loadMoveSlots(b.service_id, (b as unknown as { staff_id?: string | null }).staff_id ?? null, Number((b as unknown as { duration_minutes?: number }).duration_minutes ?? 0) || null)}>
               {t('booking.moveLoad')}
             </Button>
             {moveSlots.length > 0 ? (

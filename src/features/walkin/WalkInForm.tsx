@@ -1,3 +1,4 @@
+import { fetchSlots } from '@/lib/slots';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -180,16 +181,19 @@ export function WalkInForm({
     if (!date || !serviceId) return;
     setLoadingSlots(true);
     try {
-      const { data, error } = await supabase.rpc('get_available_slots', {
-        p_date: date,
-        p_service_id: serviceId,
+      const svcRow = services.find((x) => x.id === serviceId);
+      const extraMin = extras.filter((x) => extraIds.includes(x.id)).reduce((n, x) => n + Number(x.duration_minutes ?? 0), 0);
+      const r = await fetchSlots({
+        serviceId,
+        date,
+        staffId: staffId || null,
+        durationMin: extraMin > 0 && svcRow ? Number(svcRow.duration_minutes) + extraMin : null,
       });
-      if (error) {
-        toast.error(mapError(error, t));
+      if (r.error) {
+        toast.error(mapError(new Error(r.error), t));
         return;
       }
-      const list = (data as Array<{ start_at: string }> | null) ?? [];
-      setSlots(list.map((s) => s.start_at));
+      setSlots(r.starts);
     } finally {
       setLoadingSlots(false);
     }
@@ -535,7 +539,12 @@ export function WalkInForm({
                       >
                         {on ? <Check className="size-3" strokeWidth={3} /> : null}
                       </span>
-                      <span className="min-w-0 flex-1 break-words text-espresso">{isAr ? x.name_ar : x.name_en}</span>
+                      <span className="min-w-0 flex-1 break-words text-espresso">
+                        {isAr ? x.name_ar : x.name_en}
+                        {Number(x.duration_minutes) > 0 ? (
+                          <span className="block font-latin text-xs text-ink-70">{isAr ? `+${Number(x.duration_minutes)} دقيقة` : `+${Number(x.duration_minutes)} min`}</span>
+                        ) : null}
+                      </span>
                       <span className="shrink-0 font-latin text-xs font-semibold text-bark">+{formatEGP(priceFor(x))}</span>
                     </button>
                   );

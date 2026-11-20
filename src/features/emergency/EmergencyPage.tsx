@@ -6,6 +6,7 @@ import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { useStaff } from '@/features/staff/StaffPage';
+import { fetchSlots } from '@/lib/slots';
 import { rpcUntyped, waLink } from '@/features/staff/staffLogin';
 import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { cairoDateString, cairoDayBounds, formatCairoDateShort, formatCairoTime, toCairo } from '@/lib/time';
@@ -149,13 +150,9 @@ export function EmergencyPage() {
     for (let i = 1; i <= 7; i++) {
       const day = cairoDateString(new Date(Date.parse(bounds.start) + (i * 24 + 12) * 3600_000));
       if (day <= cairoDateString(new Date())) continue;
-      const res = r.staff_id
-        ? await rpcUntyped('get_available_slots_staff', { p_service_id: r.service_id, p_date: day, p_staff_id: r.staff_id })
-        : await rpcUntyped('get_available_slots', { p_service_id: r.service_id, p_date: day });
+      const res = await fetchSlots({ serviceId: r.service_id, date: day, staffId: r.staff_id, durationMin: Math.round(dur / 60000) || null });
       if (res.error) continue;
-      const starts = ((res.data as Array<{ start_at: string }> | null) ?? [])
-        .map((x) => x.start_at)
-        .filter(Boolean)
+      const starts = res.starts
         .filter((st) => {
           const a = Date.parse(st);
           const b = a + dur;

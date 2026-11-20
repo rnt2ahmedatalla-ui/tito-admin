@@ -40,7 +40,7 @@ const serviceSchema = z.object({
   duration_minutes: z.coerce.number().min(0).max(480),
   is_active: z.boolean(),
   is_extra: z.boolean(),
-}).refine((value) => (value.is_extra ? value.duration_minutes === 0 : value.duration_minutes >= 5));
+}).refine((value) => (value.is_extra ? value.duration_minutes >= 0 : value.duration_minutes >= 5));
 
 function SortableServiceRow({
   service,
@@ -84,7 +84,7 @@ function SortableServiceRow({
             <p className="font-medium">{locale === 'ar' ? service.name_ar : service.name_en}</p>
             <p className="font-latin text-sm text-ink-70">
               {formatEGP(service.price_egp)}
-              {isExtra ? ` · ${t('services.noTime')}` : ` · ${service.duration_minutes} min`}
+              {isExtra && service.duration_minutes <= 0 ? ` · ${t('services.noTime')}` : ` · ${service.duration_minutes} min`}
             </p>
           </div>
           <span className={`text-xs ${service.is_active ? 'text-success' : 'text-ink-70'}`}>
@@ -145,7 +145,7 @@ export function ServicesPage() {
             name_ar: payload.name_ar,
             name_en: payload.name_en,
             price_egp: payload.price_egp,
-            duration_minutes: payload.is_extra ? 0 : payload.duration_minutes,
+            duration_minutes: payload.duration_minutes,
             is_active: payload.is_active,
             is_extra: payload.is_extra,
             description_ar: payload.description_ar?.trim() || null,
@@ -159,7 +159,7 @@ export function ServicesPage() {
           name_ar: payload.name_ar,
           name_en: payload.name_en,
           price_egp: payload.price_egp,
-          duration_minutes: payload.is_extra ? 0 : payload.duration_minutes,
+          duration_minutes: payload.duration_minutes,
           is_active: payload.is_active,
           is_extra: payload.is_extra,
           sort_order: maxOrder + 1,
@@ -319,7 +319,23 @@ export function ServicesPage() {
             />
             <Input label={t('services.price')} type="number" value={form.price_egp} onChange={(e) => setForm({ ...form, price_egp: Number(e.target.value) })} />
             {form.is_extra ? (
-              <p className="text-sm text-ink-70">{t('services.extraHint')}</p>
+              <div className="space-y-1">
+                <Input
+                  label={i18n.language === 'ar' ? 'مدة الإضافة بالدقايق (0 = من غير وقت)' : 'Extra duration in minutes (0 = no time)'}
+                  type="number"
+                  min={0}
+                  max={480}
+                  value={form.duration_minutes}
+                  onChange={(e) => setForm({ ...form, duration_minutes: Math.max(0, Number(e.target.value) || 0) })}
+                />
+                <p className="text-sm text-ink-70">
+                  {form.duration_minutes > 0
+                    ? i18n.language === 'ar'
+                      ? `الإضافة دي هتزود ${form.duration_minutes} دقيقة على الحجز وتتقفل من التقويم.`
+                      : `This extra adds ${form.duration_minutes} min to the booking and blocks the calendar.`
+                    : t('services.extraHint')}
+                </p>
+              </div>
             ) : (
               <Input label={t('services.duration')} type="number" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} />
             )}
