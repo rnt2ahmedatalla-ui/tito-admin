@@ -9,9 +9,10 @@ export type FeatureFlags = {
   inactiveAfterDays: number;
   noshowPrepayAfter: number;
   waitWindowHours: number;
+  autoCompleteHours: number;
 };
 
-const OFF: FeatureFlags = { waitlist: false, packages: false, waitEstimate: false, inactiveBanner: false, inactiveAfterDays: 28, noshowPrepayAfter: 0, waitWindowHours: 3 };
+const OFF: FeatureFlags = { waitlist: false, packages: false, waitEstimate: false, inactiveBanner: false, inactiveAfterDays: 28, noshowPrepayAfter: 0, waitWindowHours: 3, autoCompleteHours: 0 };
 
 /** مفاتيح تشغيل المميزات الإضافية (لو الجدول مش موجود يرجع كله مقفول) */
 export function useFeatureFlags() {
@@ -29,6 +30,7 @@ export function useFeatureFlags() {
         inactiveAfterDays: Number(r.inactive_after_days ?? 28),
         noshowPrepayAfter: Number(r.noshow_prepay_after ?? 0),
         waitWindowHours: Number(r.wait_window_hours ?? 3),
+        autoCompleteHours: Number(r.auto_complete_hours ?? 0),
       };
     },
     staleTime: 30_000,

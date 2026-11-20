@@ -1,4 +1,5 @@
 import { fetchSlots } from '@/lib/slots';
+import { StaffNote } from '@/features/customers/StaffNote';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -440,6 +441,8 @@ export function BookingDetailPanel({ booking, open, onClose }: BookingDetailPane
             </Button>
           </div>
         ) : null}
+
+        {b.status === 'confirmed' || b.status === 'completed' ? <StaffNote bookingId={b.id} /> : null}
 
         {/* الإجراءات */}
         {isStaff ? null : (
