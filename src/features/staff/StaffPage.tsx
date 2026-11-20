@@ -397,7 +397,8 @@ const SOCIAL_FIELDS: Array<{ key: string; label: string; placeholder: string }> 
 
 function errMsg(e: unknown): string {
   const m = (e as { message?: string } | null)?.message ?? '';
-  if (/OWNER_PROTECTED/.test(m)) return 'صاحب المحل ما ينفعش يتمسح أو يتوقف';
+  if (/OWNER_ONLY/.test(m)) return 'مينفعش توقف نفسك وانت الحلاق الوحيد الشغال. لو عندك ظرف استخدم "ظرف طارئ" من المزيد.';
+  if (/OWNER_PROTECTED/.test(m)) return 'صاحب المحل ما ينفعش يتمسح. لو عايز توقف نفسك شغّل ملف features-v38.sql الأول.';
   return m;
 }
 
@@ -517,6 +518,10 @@ export function StaffPage() {
 
   const toggle = useMutation({
     mutationFn: async (m: StaffMember) => {
+      // صاحب المحل يقدر يوقف نفسه بس لو فيه حلاق تاني شغال (وإلا المحل يفضل من غير حد يستقبل حجوزات)
+      if (m.is_owner && m.is_active && !list.some((x) => x.id !== m.id && x.is_active)) {
+        throw new Error('OWNER_ONLY');
+      }
       const { error } = await untypedDb.from('staff').update({ is_active: !m.is_active }).eq('id', m.id);
       if (error) throw error;
     },
@@ -596,7 +601,6 @@ export function StaffPage() {
                   <p className="overflow-hidden break-words text-xs text-ink-70 [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box]">{m.bio}</p>
                 ) : null}
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {m.is_owner ? null : (
                 <button
                   type="button"
                   onClick={() => toggle.mutate(m)}
@@ -604,7 +608,6 @@ export function StaffPage() {
                 >
                   {m.is_active ? L('شغال', 'Active') : L('موقوف', 'Paused')}
                 </button>
-                )}
                 <button type="button" onClick={() => setScheduleFor(m)} className="rounded-full bg-sand px-2 py-0.5 text-xs font-medium text-espresso">
                   {L('جدول الشغل', 'Schedule')}
                 </button>
