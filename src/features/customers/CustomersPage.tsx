@@ -304,7 +304,9 @@ function CustomerDetailPanel({
 }
 
 export function CustomersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isArLang = !!i18n.language?.startsWith('ar');
+  const LL = (ar: string, en: string) => (isArLang ? ar : en);
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
@@ -394,7 +396,7 @@ export function CustomersPage() {
       }
       setDeleteTarget(null);
       setDeleteWithBookings(null);
-      toast.error(/IS_ADMIN|IS_STAFF/.test(m) ? 'ده حساب أدمن أو حلاق، مينفعش يتمسح من هنا' : mapError(e, t));
+      toast.error(/IS_ADMIN|IS_STAFF/.test(m) ? LL('ده حساب أدمن أو حلاق، مينفعش يتمسح من هنا', 'This is an admin or barber account and cannot be deleted here') : mapError(e, t));
     },
   });
 
@@ -527,18 +529,18 @@ export function CustomersPage() {
 
       <ConfirmDialog
         open={!!deleteTarget && deleteWithBookings === null}
-        title="مسح العميل"
-        message={`هتمسح "${deleteTarget?.full_name ?? ''}" من قايمة العملاء نهائياً. لو عنده حجوزات هسألك قبل ما أمسحها.`}
-        confirmLabel="مسح"
+        title={LL('مسح العميل', 'Delete customer')}
+        message={LL(`هتمسح "${deleteTarget?.full_name ?? ''}" من قايمة العملاء نهائياً. لو عنده حجوزات هسألك قبل ما أمسحها.`, `"${deleteTarget?.full_name ?? ''}" will be permanently removed from the customer list. If they have bookings you will be asked first.`)}
+        confirmLabel={LL('مسح', 'Delete')}
         loading={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate({ id: deleteTarget.id, withBookings: false })}
         onCancel={() => setDeleteTarget(null)}
       />
       <ConfirmDialog
         open={!!deleteTarget && deleteWithBookings !== null}
-        title="العميل ده عنده حجوزات"
-        message={`عنده ${deleteWithBookings ?? 0} حجز. لو كملت هتتمسح كل حجوزاته ودفعاته معاه، وده هيأثر على الإيراد والتقارير بتاعة الفترة دي. متأكد؟`}
-        confirmLabel="امسحه مع حجوزاته"
+        title={LL('العميل ده عنده حجوزات', 'This customer has bookings')}
+        message={LL(`عنده ${deleteWithBookings ?? 0} حجز. لو كملت هتتمسح كل حجوزاته ودفعاته معاه، وده هيأثر على الإيراد والتقارير بتاعة الفترة دي. متأكد؟`, `They have ${deleteWithBookings ?? 0} booking(s). Continuing deletes all their bookings and payments, which affects revenue and reports for that period. Are you sure?`)}
+        confirmLabel={LL('امسحه مع حجوزاته', 'Delete with bookings')}
         loading={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate({ id: deleteTarget.id, withBookings: true })}
         onCancel={() => {
