@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -253,7 +254,11 @@ export function SettingsPage() {
             <CardHeader><h2 className="font-semibold">{L('التأكيد التلقائي', 'Automation')}</h2></CardHeader>
             <CardBody className="grid gap-3">
               {check(form.auto_confirm_payment ?? true, (v) => update({ auto_confirm_payment: v }), t('settings.autoConfirm'), t('settings.autoConfirmHint'))}
-              {check(form.auto_complete ?? false, (v) => update({ auto_complete: v }), t('settings.autoComplete'))}
+              <div className="rounded-btn border border-default bg-sand/40 p-3 text-sm">
+                <p className="font-medium">{L('إكمال الحجوزات تلقائياً', 'Auto-complete bookings')}</p>
+                <p className="mt-1 text-ink-70">{L('بعد ما معاد الحجز يخلص بعدد ساعات تحددها، الحجز بيتعلّم "تمت" لوحده من غير ما تدوس عليه (وبالتالي النقاط والإيراد بيتحسبوا). لو العميل ما جاش علّمه "ما حضرش" قبل الوقت ده.', 'Some hours after an appointment ends, it is marked "Completed" automatically so points and revenue are counted. If a customer did not show up, mark "No-show" before then.')}</p>
+                <Link to="/more/extras" className="mt-2 inline-flex min-h-9 items-center rounded-btn bg-gold px-3 font-semibold text-espresso">{L('اضبط عدد الساعات (الإضافات والمميزات)', 'Set the hours (Extras & features)')}</Link>
+              </div>
             </CardBody>
           </Card>
         </>

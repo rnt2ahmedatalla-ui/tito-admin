@@ -17,7 +17,14 @@ export function TodayAlerts() {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
   const L = (ar: string, en: string) => (isAr ? ar : en);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [seen, setSeen] = useState<string>(() => {
+    try {
+      return localStorage.getItem('tito.alerts.seen') || '';
+    } catch {
+      return '';
+    }
+  });
   const fin = useFinData();
   const waitN = useWaitlistCount().data ?? 0;
 
@@ -60,6 +67,7 @@ export function TodayAlerts() {
   });
 
   const alerts: Alert[] = [];
+  const iso = (x: string) => `\u2068${x}\u2069`;
   const n = late.data ?? 0;
   if (waitN > 0) alerts.push({ key: 'wait', tone: 'warn', to: '/routine?t=waitlist', text: L(`${waitN} عميل مستني في قايمة الانتظار`, `${waitN} customer(s) on the waiting list`) });
   if (n > 0) alerts.push({ key: 'late', tone: 'warn', to: '/routine?t=payments', text: L(`${n} دفعة مستنية أكتر من ساعتين`, `${n} payment(s) waiting over 2 hours`) });
@@ -68,18 +76,18 @@ export function TodayAlerts() {
   if (d) {
     const low = (d.items ?? []).filter((i) => i.is_active && i.min_qty > 0 && i.qty <= i.min_qty);
     if (low.length > 0) {
-      const names = low.slice(0, 2).map((i) => i.name).join('، ');
+      const names = low.slice(0, 2).map((i) => iso(i.name)).join('، ');
       alerts.push({ key: 'stock', tone: 'warn', to: '/more/finance?tab=inventory', text: L(`مخزون قرّب يخلص: ${names}${low.length > 2 ? ` +${low.length - 2}` : ''}`, `Low stock: ${names}${low.length > 2 ? ` +${low.length - 2}` : ''}`) });
     }
     const soon = cairoDateString(new Date(Date.now() + 7 * 86400_000));
     const due = (d.assets ?? []).filter((a) => a.is_active && a.next_service_date && a.next_service_date <= soon);
     if (due.length > 0) {
-      alerts.push({ key: 'assets', tone: 'warn', to: '/more/finance?tab=assets', text: L(`صيانة مستحقة: ${due.slice(0, 2).map((a) => a.name).join('، ')}`, `Service due: ${due.slice(0, 2).map((a) => a.name).join(', ')}`) });
+      alerts.push({ key: 'assets', tone: 'warn', to: '/more/finance?tab=assets', text: L(`صيانة مستحقة: ${due.slice(0, 2).map((a) => iso(a.name)).join('، ')}`, `Service due: ${due.slice(0, 2).map((a) => iso(a.name)).join(', ')}`) });
     }
   }
 
   const v = vip.data ?? [];
-  if (v.length > 0) alerts.push({ key: 'vip', tone: 'info', to: '/bookings', text: L(`عميل مميز النهاردة: ${v.slice(0, 2).join('، ')}`, `VIP today: ${v.slice(0, 2).join(', ')}`) });
+  if (v.length > 0) alerts.push({ key: 'vip', tone: 'info', to: '/bookings', text: L(`عميل مميز (10+ حلاقة) عنده معاد النهاردة: ${v.slice(0, 2).map(iso).join('، ')}`, `VIP (10+ visits) booked today: ${v.slice(0, 2).map(iso).join(', ')}`) });
 
   const age = lastBackupAgeDays();
   if (age === null || age >= 7) {
@@ -87,23 +95,44 @@ export function TodayAlerts() {
   }
 
   if (alerts.length === 0) return null;
+  const sig = alerts.map((x) => x.key + (x.text.match(/\d+/)?.[0] ?? '')).join('|');
+  const isNew = sig !== seen;
+  const hasWarn = alerts.some((x) => x.tone === 'warn');
+  const expanded = open || isNew;
+  const toggle = () => {
+    if (expanded) {
+      try {
+        localStorage.setItem('tito.alerts.seen', sig);
+      } catch {
+        /* ignore */
+      }
+      setSeen(sig);
+      setOpen(false);
+    } else {
+      setOpen(true);
+    }
+  };
   return (
-    <div className="rounded-card border border-gold/40 bg-gold/10">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-start">
+    <div className={cn('overflow-hidden rounded-btn border', hasWarn ? 'border-danger/40 bg-danger/5' : 'border-gold/40 bg-gold/10')}>
+      <button type="button" onClick={toggle} className="flex min-h-10 w-full items-center justify-between gap-2 px-3 py-1.5 text-start">
         <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-espresso">
-          <TriangleAlert className="size-4 shrink-0 text-gold" aria-hidden />
-          {L('تنبيهات', 'Alerts')} <span className="font-latin">({alerts.length})</span>
+          <span className="relative flex size-5 shrink-0 items-center justify-center">
+            {isNew ? <span className="absolute inline-flex size-full animate-ping rounded-full bg-danger/40" aria-hidden /> : null}
+            <TriangleAlert className={cn('relative size-4', hasWarn ? 'text-danger' : 'text-gold')} aria-hidden />
+          </span>
+          <span className="truncate">{L('تنبيهات', 'Alerts')} <span className="font-latin">({alerts.length})</span></span>
+          {isNew ? <span className="shrink-0 rounded-pill bg-danger px-2 py-0.5 text-[10px] font-bold text-white">{L('جديد', 'New')}</span> : null}
         </span>
-        {open ? <ChevronUp className="size-4 shrink-0 text-ink-70" /> : <ChevronDown className="size-4 shrink-0 text-ink-70" />}
+        {expanded ? <ChevronUp className="size-4 shrink-0 text-ink-70" /> : <ChevronDown className="size-4 shrink-0 text-ink-70" />}
       </button>
-      {open ? (
-        <div className="flex flex-wrap gap-2 px-3 pb-3">
+      {expanded ? (
+        <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
           {alerts.map((a) => (
             <Link
               key={a.key}
               to={a.to}
               className={cn(
-                'min-w-0 max-w-full rounded-pill border px-3 py-1.5 text-xs font-medium transition-colors',
+                'min-w-0 max-w-full rounded-pill border px-3 py-1 text-xs font-medium transition-colors',
                 a.tone === 'warn' ? 'border-danger/30 bg-white text-danger hover:bg-danger/10' : 'border-bark/20 bg-white text-espresso hover:bg-sand/50',
               )}
             >

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Check, MessageCircle } from 'lucide-react';
@@ -43,6 +43,7 @@ export function CampaignsPage() {
   const [texts, setTexts] = useState<Record<string, { ar: string; en: string }>>({});
   const [discount, setDiscount] = useState('15');
   const [hours, setHours] = useState('');
+  const taRef = useRef<HTMLTextAreaElement>(null);
   const [sent, setSent] = useState<Set<string>>(() => loadSent(PRESETS[0].id));
 
   const shopQ = useQuery({
@@ -96,6 +97,16 @@ export function CampaignsPage() {
       .replace(/\{hours\}/g, hours || (msgLang === 'ar' ? 'في الأوقات الهادية' : 'at quiet hours'))
       .trimEnd() + `\n${CUSTOMER_URL}`;
 
+  const insert = (ph: string) => {
+    const el = taRef.current;
+    const a = el?.selectionStart ?? body.length;
+    const b = el?.selectionEnd ?? body.length;
+    setBody(body.slice(0, a) + ph + body.slice(b));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(a + ph.length, a + ph.length);
+    });
+  };
   const pickPreset = (p: Preset) => {
     setPreset(p);
     setSent(loadSent(p.id));
@@ -146,9 +157,18 @@ export function CampaignsPage() {
             <button type="button" className={chip(msgLang === 'ar')} onClick={() => setMsgLang('ar')}>عربي</button>
             <button type="button" className={chip(msgLang === 'en')} onClick={() => setMsgLang('en')}>English</button>
           </div>
-          <textarea rows={4} maxLength={600} dir={msgLang === 'ar' ? 'rtl' : 'ltr'} value={body} onChange={(e) => setBody(e.target.value)}
+          <textarea ref={taRef} rows={4} maxLength={600} dir={msgLang === 'ar' ? 'rtl' : 'ltr'} value={body} onChange={(e) => setBody(e.target.value)}
             className="w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold" />
-          <p className="text-xs text-ink-70">{L('بيانات تلقائية:', 'Auto-fill:')} <span className="font-latin">{'{name} {shop} {discount} {hours}'}</span></p>
+          <div>
+            <p className="mb-1.5 text-xs text-ink-70">{L('دوس لإضافة بيانات تلقائية مكان المؤشر:', 'Tap to insert auto-filled data at the cursor:')}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[['{name}', L('اسم العميل', 'Customer name')], ['{shop}', L('اسم المحل', 'Shop name')], ['{discount}', L('الخصم', 'Discount')], ['{hours}', L('الأوقات', 'Hours')]].map(([ph, lbl]) => (
+                <button key={ph} type="button" onClick={() => insert(ph)} className="inline-flex items-center gap-1.5 rounded-full border border-default bg-white px-2.5 py-1 text-xs hover:bg-sand">
+                  <span className="font-latin">{ph}</span><span className="text-ink-70">{lbl}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           {preset.id === 'quiet' ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <Input label={L('نسبة الخصم %', 'Discount %')} type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} />
