@@ -12,6 +12,9 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
 import { FinanceBoxesSettings } from './FinanceBoxesSettings';
+import { PushReminderCard } from './PushReminderCard';
+import { CalendarClock, CreditCard, Store, Smartphone, MessageSquare } from 'lucide-react';
+import { cn } from '@/lib/cn';
 
 const settingsSchema = z.object({
   slot_step_min: z.coerce.number().min(5),
@@ -61,6 +64,7 @@ export function SettingsPage() {
   const [form, setForm] = useState<Partial<Settings>>({});
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [tab, setTab] = useState<'booking' | 'payment' | 'shop' | 'customer' | 'messages'>('booking');
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -132,265 +136,232 @@ export function SettingsPage() {
 
   if (isLoading) return <Skeleton className="h-96" />;
 
+  const isAr = i18n.language?.startsWith('ar');
+  const L = (ar: string, en: string) => (isAr ? ar : en);
+  const saveAll = () =>
+    saveSection({
+      social_instagram: cleanText(extra.social_instagram),
+      social_facebook: cleanText(extra.social_facebook),
+      social_tiktok: cleanText(extra.social_tiktok),
+      social_youtube: cleanText(extra.social_youtube),
+      booking_policy_ar: cleanText(extra.booking_policy_ar),
+      booking_policy_en: cleanText(extra.booking_policy_en),
+    } as Partial<Settings>);
+
+  const tabs = [
+    { id: 'booking', icon: CalendarClock, label: L('الحجز', 'Booking') },
+    { id: 'payment', icon: CreditCard, label: L('الدفع والصناديق', 'Payment & boxes') },
+    { id: 'shop', icon: Store, label: L('المحل والتواصل', 'Shop & contact') },
+    { id: 'customer', icon: Smartphone, label: L('واجهة العميل', 'Customer app') },
+    { id: 'messages', icon: MessageSquare, label: L('الرسائل والتذكير', 'Messages & reminders') },
+  ] as const;
+
+  const bookingOpen = form.booking_open ?? true;
+  const check = (checked: boolean, onChange: (v: boolean) => void, title: string, hint?: string) => (
+    <label className="flex cursor-pointer items-start gap-3 rounded-btn border border-default bg-white p-3">
+      <input type="checkbox" className="mt-1 size-5 shrink-0 accent-gold" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="min-w-0">
+        <span className="font-medium">{title}</span>
+        {hint ? <span className="mt-0.5 block text-sm text-ink-70">{hint}</span> : null}
+      </span>
+    </label>
+  );
+  const area = (field: keyof Settings, labelKey: string, max: number, rows = 2, ar = false) => (
+    <label key={String(field)} className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium text-ink-70">{labelKey}</span>
+      <textarea
+        className="w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+        maxLength={max}
+        rows={rows}
+        value={(form[field] as string | null | undefined) ?? ''}
+        onChange={(e) => update({ [field]: e.target.value } as Partial<Settings>)}
+        dir={ar ? 'rtl' : 'ltr'}
+      />
+      <span className="text-xs text-ink-70 font-latin">{((form[field] as string | null | undefined) ?? '').length}/{max}</span>
+    </label>
+  );
+  const policy = (field: 'booking_policy_ar' | 'booking_policy_en', label: string, ar: boolean) => (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium text-ink-70">{label}</span>
+      <textarea rows={4} maxLength={600} dir={ar ? 'rtl' : 'ltr'}
+        className="w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+        value={extra[field] ?? ''} onChange={(e) => updateExtra({ [field]: e.target.value })} />
+    </label>
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
-        {dirty ? <span className="text-sm text-warning">{t('app.dirty')}</span> : null}
+    <div className="mx-auto w-full max-w-4xl space-y-5 pb-24">
+      <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
+
+      {/* مفتاح الحجز الرئيسي */}
+      <div className={cn('flex items-center justify-between gap-3 rounded-card border p-4', bookingOpen ? 'border-success/40 bg-success/10' : 'border-danger/40 bg-danger/10')}>
+        <div className="min-w-0">
+          <p className="font-semibold">{t('settings.bookingOpen')}</p>
+          <p className="text-sm text-ink-70">{bookingOpen ? L('العملاء يقدروا يحجزوا دلوقتي.', 'Customers can book now.') : L('الحجز واقف — العملاء مش هيقدروا يحجزوا.', 'Booking is paused.')}</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={bookingOpen}
+          aria-label={t('settings.bookingOpen')}
+          onClick={() => {
+            if (bookingOpen) setConfirmClose(true);
+            else {
+              update({ booking_open: true });
+              saveSection({ booking_open: true });
+            }
+          }}
+          className={cn('relative h-8 w-14 shrink-0 rounded-full transition-colors', bookingOpen ? 'bg-success' : 'bg-ink-70/40')}
+          dir="ltr"
+        >
+          <span className={cn('absolute top-1 size-6 rounded-full bg-white shadow transition-all', bookingOpen ? 'left-7' : 'left-1')} />
+        </button>
       </div>
 
-      <Card>
-        <CardHeader><h2 className="font-semibold">{t('settings.master')}</h2></CardHeader>
-        <CardBody>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.booking_open ?? true}
-              onChange={(e) => {
-                if (!e.target.checked) setConfirmClose(true);
-                else {
-                  update({ booking_open: true });
-                  saveSection({ booking_open: true });
-                }
-              }}
-              className="size-6 accent-gold"
-            />
-            <span className="text-lg font-semibold">{t('settings.bookingOpen')}</span>
-          </label>
-        </CardBody>
-      </Card>
+      {/* تبويبات */}
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="tablist">
+        {tabs.map((x) => {
+          const Icon = x.icon;
+          return (
+            <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
+              className={cn('inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors',
+                tab === x.id ? 'border-gold bg-gold text-espresso' : 'border-default bg-white text-ink-70 hover:bg-sand')}>
+              <Icon className="size-4" aria-hidden />
+              {x.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <Card>
-        <CardHeader>
-          <h2 className="font-semibold">{t('settings.automation')}</h2>
-          <p className="text-sm text-ink-70">{t('settings.automationHint')}</p>
-        </CardHeader>
-        <CardBody className="grid gap-4">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              className="mt-1 size-5 accent-gold"
-              checked={form.auto_confirm_payment ?? true}
-              onChange={(e) => update({ auto_confirm_payment: e.target.checked })}
-            />
-            <span>
-              <span className="font-medium">{t('settings.autoConfirm')}</span>
-              <span className="mt-0.5 block text-sm text-ink-70">{t('settings.autoConfirmHint')}</span>
-            </span>
-          </label>
+      {tab === 'booking' ? (
+        <>
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold">{L('قواعد الحجز', 'Booking rules')}</h2>
+              <p className="text-sm text-ink-70">{L('بتتحكم في إزاي العميل بيحجز وبيلغي.', 'Controls how customers book and cancel.')}</p>
+            </CardHeader>
+            <CardBody className="grid gap-3 sm:grid-cols-2">
+              <Input label={t('settings.slotStep')} type="number" value={form.slot_step_min ?? ''} onChange={(e) => update({ slot_step_min: Number(e.target.value) })} />
+              <Input label={t('settings.minHoursBefore')} type="number" value={form.min_hours_before ?? ''} onChange={(e) => update({ min_hours_before: Number(e.target.value) })} />
+              <Input label={t('settings.maxDaysAhead')} type="number" value={form.max_days_ahead ?? ''} onChange={(e) => update({ max_days_ahead: Number(e.target.value) })} />
+              <Input label={t('settings.cancelWindow')} type="number" value={form.cancel_window_hours ?? ''} onChange={(e) => update({ cancel_window_hours: Number(e.target.value) })} />
+              <Input label={t('settings.holdMinutes')} type="number" value={form.hold_minutes ?? ''} onChange={(e) => update({ hold_minutes: Number(e.target.value) })} />
+              <Input label={t('settings.maxPending')} type="number" value={form.max_active_pending_per_user ?? ''} onChange={(e) => update({ max_active_pending_per_user: Number(e.target.value) })} />
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader><h2 className="font-semibold">{L('التأكيد التلقائي', 'Automation')}</h2></CardHeader>
+            <CardBody className="grid gap-3">
+              {check(form.auto_confirm_payment ?? true, (v) => update({ auto_confirm_payment: v }), t('settings.autoConfirm'), t('settings.autoConfirmHint'))}
+              {check(form.auto_complete ?? false, (v) => update({ auto_complete: v }), t('settings.autoComplete'))}
+            </CardBody>
+          </Card>
+        </>
+      ) : null}
 
-          <div className="rounded-btn border border-bark/15 bg-sand/30 p-3 text-sm text-ink-70">
-            {t('settings.manualRemindersOnly')}
+      {tab === 'payment' ? (
+        <>
+          <Card>
+            <CardHeader><h2 className="font-semibold">{t('settings.payment')}</h2></CardHeader>
+            <CardBody className="grid gap-3">
+              {check(form.allow_pay_at_shop ?? false, (v) => update({ allow_pay_at_shop: v }), t('settings.allowPayAtShop'))}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label={t('settings.instapay')} value={form.instapay_number ?? ''} onChange={(e) => update({ instapay_number: e.target.value })} />
+                <Input label={t('settings.vodafone')} value={form.vodafone_cash_number ?? ''} onChange={(e) => update({ vodafone_cash_number: e.target.value })} />
+              </div>
+              <p className="text-xs text-ink-70">{t('settings.payLinkHint')}</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label={t('settings.paymentNoteAr')} value={form.payment_note_ar ?? ''} onChange={(e) => update({ payment_note_ar: e.target.value })} />
+                <Input label={t('settings.paymentNoteEn')} value={form.payment_note_en ?? ''} onChange={(e) => update({ payment_note_en: e.target.value })} />
+              </div>
+            </CardBody>
+          </Card>
+          <FinanceBoxesSettings />
+        </>
+      ) : null}
+
+      {tab === 'shop' ? (
+        <>
+          <Card>
+            <CardHeader><h2 className="font-semibold">{t('settings.shop')}</h2></CardHeader>
+            <CardBody className="grid gap-3 sm:grid-cols-2">
+              <Input label={t('settings.shopName')} value={form.shop_name ?? ''} onChange={(e) => update({ shop_name: e.target.value })} />
+              <Input label={t('settings.shopWhatsapp')} value={form.shop_whatsapp ?? ''} onChange={(e) => update({ shop_whatsapp: e.target.value })} />
+              <Input label={t('settings.shopLocation')} value={form.shop_location_url ?? ''} onChange={(e) => update({ shop_location_url: e.target.value })} />
+              <Input label={t('settings.timezone')} value="Africa/Cairo" readOnly disabled />
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold">{L('السوشيال', 'Social links')}</h2>
+              <p className="text-sm text-ink-70">{L('اختياري. أي لينك فاضي مش هيظهر للعميل.', 'Optional. Empty links will not show to customers.')}</p>
+            </CardHeader>
+            <CardBody className="grid gap-3 sm:grid-cols-2">
+              <Input label="Instagram" value={extra.social_instagram ?? ''} onChange={(e) => updateExtra({ social_instagram: e.target.value })} placeholder="https://instagram.com/..." dir="ltr" />
+              <Input label="Facebook" value={extra.social_facebook ?? ''} onChange={(e) => updateExtra({ social_facebook: e.target.value })} placeholder="https://facebook.com/..." dir="ltr" />
+              <Input label="TikTok" value={extra.social_tiktok ?? ''} onChange={(e) => updateExtra({ social_tiktok: e.target.value })} placeholder="https://tiktok.com/@..." dir="ltr" />
+              <Input label="YouTube" value={extra.social_youtube ?? ''} onChange={(e) => updateExtra({ social_youtube: e.target.value })} placeholder="https://youtube.com/..." dir="ltr" />
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader><h2 className="font-semibold">{L('سياسة الحجز', 'Booking policy')}</h2></CardHeader>
+            <CardBody className="grid gap-3 sm:grid-cols-2">
+              {policy('booking_policy_ar', L('عربي', 'Arabic'), true)}
+              {policy('booking_policy_en', L('إنجليزي', 'English'), false)}
+            </CardBody>
+          </Card>
+        </>
+      ) : null}
+
+      {tab === 'customer' ? (
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold">{t('settings.customerUi')}</h2>
+            <p className="text-sm text-ink-70">{t('settings.customerUiHint')}</p>
+          </CardHeader>
+          <CardBody className="grid gap-4 sm:grid-cols-2">
+            {area('tagline_ar', t('settings.taglineAr'), 100, 2, true)}
+            {area('tagline_en', t('settings.taglineEn'), 100)}
+            {area('hero_headline_ar', t('settings.heroHeadlineAr'), 80, 2, true)}
+            {area('hero_headline_en', t('settings.heroHeadlineEn'), 80)}
+            {area('hero_support_ar', t('settings.heroSupportAr'), 200, 3, true)}
+            {area('hero_support_en', t('settings.heroSupportEn'), 200, 3)}
+            {area('about_ar', t('settings.aboutAr'), 600, 5, true)}
+            {area('about_en', t('settings.aboutEn'), 600, 5)}
+            <p className="text-sm text-ink-70 sm:col-span-2">{t('settings.customerUiSaveHint')}</p>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {tab === 'messages' ? (
+        <>
+          <PushReminderCard />
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold">{L('رسائل الواتساب', 'WhatsApp messages')}</h2>
+              <p className="text-sm text-ink-70">{t('settings.placeholders')}</p>
+            </CardHeader>
+            <CardBody className="grid gap-3 sm:grid-cols-2">
+              <Input label={t('settings.reminderAr')} value={form.reminder_template_ar ?? ''} onChange={(e) => update({ reminder_template_ar: e.target.value })} />
+              <Input label={t('settings.reminderEn')} value={form.reminder_template_en ?? ''} onChange={(e) => update({ reminder_template_en: e.target.value })} />
+              <Input label={t('settings.confirmAr')} value={form.confirmation_template_ar ?? ''} onChange={(e) => update({ confirmation_template_ar: e.target.value })} />
+              <Input label={t('settings.confirmEn')} value={form.confirmation_template_en ?? ''} onChange={(e) => update({ confirmation_template_en: e.target.value })} />
+              <Input label={t('settings.cancelAr')} value={form.cancellation_template_ar ?? ''} onChange={(e) => update({ cancellation_template_ar: e.target.value })} />
+              <Input label={t('settings.cancelEn')} value={form.cancellation_template_en ?? ''} onChange={(e) => update({ cancellation_template_en: e.target.value })} />
+            </CardBody>
+          </Card>
+        </>
+      ) : null}
+
+      {/* شريط حفظ ثابت */}
+      {dirty ? (
+        <div className="fixed inset-x-0 bottom-[4.75rem] z-40 px-3 lg:bottom-4 lg:start-64">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 rounded-card border border-gold/50 bg-espresso px-4 py-3 text-white shadow-warm">
+            <span className="text-sm">{t('app.dirty')}</span>
+            <Button variant="primary" onClick={saveAll} loading={saveMutation.isPending}>{t('app.save')}</Button>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="primary"
-              onClick={() => saveSection({ auto_reminders: false })}
-              loading={saveMutation.isPending}
-            >
-              {t('app.save')}
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader><h2 className="font-semibold">{t('settings.booking')}</h2></CardHeader>
-        <CardBody className="grid gap-3 sm:grid-cols-2">
-          <Input label={t('settings.slotStep')} type="number" value={form.slot_step_min ?? ''} onChange={(e) => update({ slot_step_min: Number(e.target.value) })} />
-          <Input label={t('settings.minHoursBefore')} type="number" value={form.min_hours_before ?? ''} onChange={(e) => update({ min_hours_before: Number(e.target.value) })} />
-          <Input label={t('settings.maxDaysAhead')} type="number" value={form.max_days_ahead ?? ''} onChange={(e) => update({ max_days_ahead: Number(e.target.value) })} />
-          <Input label={t('settings.cancelWindow')} type="number" value={form.cancel_window_hours ?? ''} onChange={(e) => update({ cancel_window_hours: Number(e.target.value) })} />
-          <Input label={t('settings.holdMinutes')} type="number" value={form.hold_minutes ?? ''} onChange={(e) => update({ hold_minutes: Number(e.target.value) })} />
-          <Input label={t('settings.maxPending')} type="number" value={form.max_active_pending_per_user ?? ''} onChange={(e) => update({ max_active_pending_per_user: Number(e.target.value) })} />
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.auto_complete ?? false} onChange={(e) => update({ auto_complete: e.target.checked })} />
-            {t('settings.autoComplete')}
-          </label>
-          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader><h2 className="font-semibold">{t('settings.payment')}</h2></CardHeader>
-        <CardBody className="grid gap-3">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.allow_pay_at_shop ?? false} onChange={(e) => update({ allow_pay_at_shop: e.target.checked })} />
-            {t('settings.allowPayAtShop')}
-          </label>
-          <Input label={t('settings.instapay')} value={form.instapay_number ?? ''} onChange={(e) => update({ instapay_number: e.target.value })} />
-          <p className="text-xs text-ink-70">{t('settings.payLinkHint')}</p>
-          <Input label={t('settings.vodafone')} value={form.vodafone_cash_number ?? ''} onChange={(e) => update({ vodafone_cash_number: e.target.value })} />
-          <Input label={t('settings.paymentNoteAr')} value={form.payment_note_ar ?? ''} onChange={(e) => update({ payment_note_ar: e.target.value })} />
-          <Input label={t('settings.paymentNoteEn')} value={form.payment_note_en ?? ''} onChange={(e) => update({ payment_note_en: e.target.value })} />
-          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
-        </CardBody>
-      </Card>
-
-      <FinanceBoxesSettings />
-
-      <Card>
-        <CardHeader><h2 className="font-semibold">{t('settings.shop')}</h2></CardHeader>
-        <CardBody className="grid gap-3">
-          <Input label={t('settings.shopName')} value={form.shop_name ?? ''} onChange={(e) => update({ shop_name: e.target.value })} />
-          <Input label={t('settings.shopWhatsapp')} value={form.shop_whatsapp ?? ''} onChange={(e) => update({ shop_whatsapp: e.target.value })} />
-          <Input label={t('settings.shopLocation')} value={form.shop_location_url ?? ''} onChange={(e) => update({ shop_location_url: e.target.value })} />
-          <Input label={t('settings.timezone')} value="Africa/Cairo" readOnly disabled />
-          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="font-semibold">{t('settings.customerUi')}</h2>
-          <p className="text-sm text-ink-70">{t('settings.customerUiHint')}</p>
-        </CardHeader>
-        <CardBody className="grid gap-4">
-          {(
-            [
-              ['tagline_ar', 'taglineAr', 100],
-              ['tagline_en', 'taglineEn', 100],
-              ['hero_headline_ar', 'heroHeadlineAr', 80],
-              ['hero_headline_en', 'heroHeadlineEn', 80],
-              ['hero_support_ar', 'heroSupportAr', 200],
-              ['hero_support_en', 'heroSupportEn', 200],
-              ['about_ar', 'aboutAr', 600],
-              ['about_en', 'aboutEn', 600],
-            ] as const
-          ).map(([field, labelKey, max]) => (
-            <label key={field} className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink-70">{t(`settings.${labelKey}`)}</span>
-              <textarea
-                className="min-h-20 w-full rounded-btn border border-bark/20 bg-white px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                maxLength={max}
-                rows={field.startsWith('about') ? 5 : 2}
-                value={(form[field] as string | null | undefined) ?? ''}
-                onChange={(e) => update({ [field]: e.target.value })}
-                dir={field.endsWith('_ar') ? 'rtl' : 'ltr'}
-              />
-              <span className="text-xs text-ink-70 font-latin">
-                {((form[field] as string | null | undefined) ?? '').length}/{max}
-              </span>
-            </label>
-          ))}
-          <p className="text-sm text-ink-70">{t('settings.customerUiSaveHint')}</p>
-          <Button
-            variant="primary"
-            onClick={() =>
-              saveSection({
-                tagline_ar: form.tagline_ar ?? null,
-                tagline_en: form.tagline_en ?? null,
-                hero_headline_ar: form.hero_headline_ar ?? null,
-                hero_headline_en: form.hero_headline_en ?? null,
-                hero_support_ar: form.hero_support_ar ?? null,
-                hero_support_en: form.hero_support_en ?? null,
-                about_ar: form.about_ar ?? null,
-                about_en: form.about_en ?? null,
-              })
-            }
-            loading={saveMutation.isPending}
-          >
-            {t('app.save')}
-          </Button>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="font-semibold">
-            {i18n.language === 'ar' ? 'لينكات السوشيال وسياسة الحجز' : 'Social links & booking policy'}
-          </h2>
-          <p className="text-sm text-ink-70">
-            {i18n.language === 'ar'
-              ? 'اختياري. أي لينك فاضي مش هيظهر للعميل.'
-              : 'Optional. Empty links will not show to customers.'}
-          </p>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <Input
-            label="Instagram"
-            value={extra.social_instagram ?? ''}
-            onChange={(e) => updateExtra({ social_instagram: e.target.value })}
-            placeholder="https://instagram.com/..."
-          />
-          <Input
-            label="Facebook"
-            value={extra.social_facebook ?? ''}
-            onChange={(e) => updateExtra({ social_facebook: e.target.value })}
-            placeholder="https://facebook.com/..."
-          />
-          <Input
-            label="TikTok"
-            value={extra.social_tiktok ?? ''}
-            onChange={(e) => updateExtra({ social_tiktok: e.target.value })}
-            placeholder="https://tiktok.com/@..."
-          />
-          <Input
-            label="YouTube"
-            value={extra.social_youtube ?? ''}
-            onChange={(e) => updateExtra({ social_youtube: e.target.value })}
-            placeholder="https://youtube.com/..."
-          />
-          <div>
-            <label className="text-sm font-medium text-ink-70">
-              {i18n.language === 'ar' ? 'سياسة الحجز (عربي)' : 'Booking policy (Arabic)'}
-            </label>
-            <textarea
-              rows={4}
-              maxLength={600}
-              className="mt-1 w-full rounded-btn border border-bark/20 bg-white p-3 text-sm text-espresso"
-              value={extra.booking_policy_ar ?? ''}
-              onChange={(e) => updateExtra({ booking_policy_ar: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-ink-70">
-              {i18n.language === 'ar' ? 'سياسة الحجز (إنجليزي)' : 'Booking policy (English)'}
-            </label>
-            <textarea
-              rows={4}
-              maxLength={600}
-              className="mt-1 w-full rounded-btn border border-bark/20 bg-white p-3 text-sm text-espresso"
-              value={extra.booking_policy_en ?? ''}
-              onChange={(e) => updateExtra({ booking_policy_en: e.target.value })}
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button
-              onClick={() =>
-                saveSection({
-                  social_instagram: cleanText(extra.social_instagram),
-                  social_facebook: cleanText(extra.social_facebook),
-                  social_tiktok: cleanText(extra.social_tiktok),
-                  social_youtube: cleanText(extra.social_youtube),
-                  booking_policy_ar: cleanText(extra.booking_policy_ar),
-                  booking_policy_en: cleanText(extra.booking_policy_en),
-                } as Partial<Settings>)
-              }
-              loading={saveMutation.isPending}
-            >
-              {t('app.save')}
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="font-semibold">{t('settings.messages')}</h2>
-          <p className="text-sm text-ink-70">{t('settings.placeholders')}</p>
-        </CardHeader>
-        <CardBody className="grid gap-3">
-          <Input label={t('settings.reminderAr')} value={form.reminder_template_ar ?? ''} onChange={(e) => update({ reminder_template_ar: e.target.value })} />
-          <Input label={t('settings.reminderEn')} value={form.reminder_template_en ?? ''} onChange={(e) => update({ reminder_template_en: e.target.value })} />
-          <Input label={t('settings.confirmAr')} value={form.confirmation_template_ar ?? ''} onChange={(e) => update({ confirmation_template_ar: e.target.value })} />
-          <Input label={t('settings.confirmEn')} value={form.confirmation_template_en ?? ''} onChange={(e) => update({ confirmation_template_en: e.target.value })} />
-          <Input label={t('settings.cancelAr')} value={form.cancellation_template_ar ?? ''} onChange={(e) => update({ cancellation_template_ar: e.target.value })} />
-          <Input label={t('settings.cancelEn')} value={form.cancellation_template_en ?? ''} onChange={(e) => update({ cancellation_template_en: e.target.value })} />
-          <Button variant="primary" onClick={() => saveSection()} loading={saveMutation.isPending}>{t('app.save')}</Button>
-        </CardBody>
-      </Card>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmClose}

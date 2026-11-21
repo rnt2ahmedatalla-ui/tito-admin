@@ -558,7 +558,7 @@ export function TodayPage() {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setShowAllHours((v) => !v)}
@@ -604,6 +604,35 @@ export function TodayPage() {
             </button>
           </div>
 
+          {/* Zoom */}
+          <div className="flex items-center rounded-btn border border-bark/20 bg-white p-0.5 shadow-2xs" dir="ltr">
+            <button
+              type="button"
+              onClick={() => setHourH((h) => clampH(h / 1.25))}
+              disabled={hourH <= HOUR_MIN}
+              aria-label="Zoom out"
+              className="flex size-7 items-center justify-center rounded-btn text-base font-bold text-espresso hover:bg-sand disabled:opacity-40"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={() => setHourH(HOUR_HEIGHT_DEFAULT)}
+              aria-label="Reset zoom"
+              className="px-1.5 font-latin text-[11px] font-medium text-ink-70 hover:text-espresso"
+            >
+              {Math.round((hourH / HOUR_HEIGHT_DEFAULT) * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={() => setHourH((h) => clampH(h * 1.25))}
+              disabled={hourH >= HOUR_MAX}
+              aria-label="Zoom in"
+              className="flex size-7 items-center justify-center rounded-btn text-base font-bold text-espresso hover:bg-sand disabled:opacity-40"
+            >
+              +
+            </button>
+          </div>
         </div>
       </div>
 
@@ -720,26 +749,6 @@ export function TodayPage() {
         <Skeleton className="h-[520px] rounded-card" />
       ) : (
         <div className="relative overflow-hidden rounded-card border border-bark/15 bg-white shadow-warm-sm">
-          <div className="absolute bottom-36 end-3 z-40 flex flex-col overflow-hidden rounded-btn border border-bark/20 bg-white/95 shadow-warm lg:bottom-3">
-            <button
-              type="button"
-              onClick={() => setHourH((h) => clampH(h * 1.25))}
-              disabled={hourH >= HOUR_MAX}
-              aria-label="Zoom in"
-              className="flex size-9 items-center justify-center text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              onClick={() => setHourH((h) => clampH(h / 1.25))}
-              disabled={hourH <= HOUR_MIN}
-              aria-label="Zoom out"
-              className="flex size-9 items-center justify-center border-t border-bark/15 text-lg font-bold text-espresso hover:bg-sand disabled:opacity-40"
-            >
-              −
-            </button>
-          </div>
           {/* Calendar Scroll Area */}
           <div
             ref={scrollAreaRef}
