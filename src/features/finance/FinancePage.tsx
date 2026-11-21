@@ -14,6 +14,7 @@ const formatEGP = (n: number) => `\u200E${baseEGP(n)}`;
 import { cn } from '@/lib/cn';
 import { FinanceTab as IncomeTab } from '@/features/payments/FinanceTab';
 import { TransfersTab } from '@/features/payments/TransfersTab';
+import { PlanTab } from './PlanTab';
 import { ReportsPage as BookingsReport } from '@/features/reports/ReportsPage';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -35,7 +36,7 @@ import {
   type WalletKind,
 } from './useFinance';
 
-type TabId = 'bookingsReport' | 'overview' | 'income' | 'transfers' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'assets' | 'reports' | 'wallets' | 'closing' | 'categories';
+type TabId = 'plan' | 'bookingsReport' | 'overview' | 'income' | 'transfers' | 'expenses' | 'recurring' | 'budget' | 'inventory' | 'assets' | 'reports' | 'wallets' | 'closing' | 'categories';
 
 const selectCls = 'min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm text-espresso';
 
@@ -74,13 +75,14 @@ export function FinancePage() {
   const [sp] = useSearchParams();
   const [tab, setTab] = useState<TabId>(() => {
     const asked = sp.get('tab') as TabId | null;
-    const ok: TabId[] = ['bookingsReport', 'overview', 'income', 'transfers', 'expenses', 'recurring', 'budget', 'inventory', 'assets', 'reports', 'wallets', 'closing', 'categories'];
+    const ok: TabId[] = ['plan', 'bookingsReport', 'overview', 'income', 'transfers', 'expenses', 'recurring', 'budget', 'inventory', 'assets', 'reports', 'wallets', 'closing', 'categories'];
     return asked && ok.includes(asked) ? asked : 'overview';
   });
   const q = useFinData();
 
   const tabs: Array<{ id: TabId; label: string }> = [
     { id: 'overview', label: L('نظرة عامة', 'Overview') },
+    { id: 'plan', label: L('الخطة والأهداف', 'Plan & goals') },
     { id: 'income', label: L('الدخل والصناديق', 'Income & boxes') },
     { id: 'transfers', label: L('سجل الحوالات', 'Transfers log') },
     { id: 'expenses', label: L('المصروفات', 'Expenses') },
@@ -135,6 +137,8 @@ export function FinancePage() {
         <Skeleton className="h-40" />
       ) : tab === 'overview' ? (
         <Overview d={d} />
+      ) : tab === 'plan' ? (
+        <PlanTab d={d} />
       ) : tab === 'expenses' ? (
         <Expenses d={d} />
       ) : tab === 'recurring' ? (

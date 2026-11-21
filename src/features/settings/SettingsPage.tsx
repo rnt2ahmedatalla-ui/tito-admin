@@ -12,7 +12,6 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
-import { FinanceBoxesSettings } from './FinanceBoxesSettings';
 import { PushReminderCard } from './PushReminderCard';
 import { CalendarClock, CreditCard, Store, Smartphone, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -281,7 +280,13 @@ export function SettingsPage() {
               </div>
             </CardBody>
           </Card>
-          <FinanceBoxesSettings />
+          <Card>
+            <CardHeader><h2 className="font-semibold">{L('صناديق توزيع الربح', 'Profit boxes')}</h2></CardHeader>
+            <CardBody className="space-y-2 text-sm">
+              <p className="text-ink-70">{L('الصناديق اتنقلت لمكان واحد منظم جوه المالية، عشان مفيش تكرار.', 'Boxes moved into one tidy place inside Finance, to avoid duplicates.')}</p>
+              <Link to="/more/finance?tab=plan" className="inline-flex min-h-9 items-center rounded-btn bg-gold px-3 font-semibold text-espresso">{L('افتح الخطة والأهداف', 'Open Plan & goals')}</Link>
+            </CardBody>
+          </Card>
         </>
       ) : null}
 

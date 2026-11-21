@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatEGP, formatEGPCompact } from '@/lib/money';
 import { cairoDayBounds, cairoDateString, toCairo } from '@/lib/time';
-import { computeBoxes, useFinanceBoxes } from './useFinanceBoxes';
+import { computeBoxes } from './useFinanceBoxes';
+import { useFinData } from '@/features/finance/useFinance';
 
 type FinanceSummary = {
   online: number;
@@ -71,8 +72,8 @@ export function FinanceTab() {
   });
   const finance = financeQuery.data;
 
-  const boxesQuery = useFinanceBoxes();
-  const boxes = boxesQuery.data ?? [];
+  const boxesQuery = useFinData();
+  const boxes = (boxesQuery.data?.settings?.alloc ?? []).map((a) => ({ id: a.id, name: a.name, pct: a.pct }));
   const split = computeBoxes(finance?.grand_total ?? 0, boxes);
 
   return (
@@ -192,7 +193,7 @@ export function FinanceTab() {
           {boxes.length === 0 ? (
             <p className="text-sm text-ink-70">
               {t('payments.boxesEmpty')}{' '}
-              <Link to="/more/settings" className="font-semibold text-gold underline">
+              <Link to="/more/finance?tab=plan" className="font-semibold text-gold underline">
                 {t('payments.boxesEditLink')}
               </Link>
             </p>

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Eraser } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -28,6 +29,17 @@ export function CleanupPage() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [typed, setTyped] = useState('');
+  const EXTRA_SCOPES: Array<[string, string, string]> = [
+    ['finance', 'الحركات المالية والإقفال اليومي (وبداية الحساب بتبدأ من التاريخ ده)', 'Finance transactions & daily closings (accounting restarts at this date)'],
+    ['reviews', 'التقييمات', 'Reviews'],
+    ['notifications', 'الإشعارات', 'Notifications'],
+    ['waitlist', 'قايمة الانتظار', 'Waiting list'],
+    ['audit', 'سجل التغييرات', 'Audit log'],
+    ['loyalty', 'نقاط الولاء (هتتصفّر نقاط العملاء الناتجة عن الفترة دي)', 'Loyalty points history (customers lose points earned in this period)'],
+  ];
+  const [scopes, setScopes] = useState<Set<string>>(new Set(['finance', 'reviews', 'notifications', 'waitlist', 'audit']));
+  const toggleScope = (k: string) => setScopes((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const useExtras = sel === 'all' && scopes.size > 0;
 
   const who = sel === 'all' ? null : sel;
   const whoName = sel === 'all' ? L('كل الحلاقين', 'All barbers') : (staff.find((m) => m.id === sel)?.name ?? '');
@@ -46,9 +58,17 @@ export function CleanupPage() {
 
   const purge = useMutation({
     mutationFn: async () => {
-      const { data, error } = await rpcUntyped('admin_purge_barber_data', { p_staff: who, p_before: before });
-      if (error) throw new Error(error.message);
-      return Number((data as { deleted?: number } | null)?.deleted ?? 0);
+      let deleted = 0;
+      if ((preview?.bookings ?? 0) > 0) {
+        const { data, error } = await rpcUntyped('admin_purge_barber_data', { p_staff: who, p_before: before });
+        if (error) throw new Error(error.message);
+        deleted = Number((data as { deleted?: number } | null)?.deleted ?? 0);
+      }
+      if (useExtras) {
+        const { error } = await rpcUntyped('admin_purge_extras', { p_before: before, p_scopes: [...scopes] });
+        if (error) throw new Error(error.message.includes('admin_purge_extras') ? 'شغّل ملف features-v48.sql الأول' : error.message);
+      }
+      return deleted;
     },
     onSuccess: (n) => {
       toast.success(L(`اتمسح ${n} حجز`, `${n} bookings deleted`));
@@ -71,13 +91,13 @@ export function CleanupPage() {
         <CardBody className="space-y-4 p-4">
           <p className="text-sm text-ink-70">
             {L(
-              'بتمسح حجوزات الأيام اللي فاتت (ومعاها دفعاتها) عشان تبدأ حساب مالي نضيف. حجوزات النهاردة والأيام الجاية بتفضل زي ما هي.',
+              'اختار تاريخ، وكل اللي قبله بيتمسح (حجوزات ودفعات وسجلات)، وكل اللي من التاريخ ده لحد النهارده والجاي بيفضل زي ما هو. استخدمها عشان تبدأ شغلك الحقيقي من نضيف.',
               'Deletes bookings from past days (and their payments) so you can start clean. Today and upcoming bookings stay.',
             )}
           </p>
           <div className="rounded-btn bg-success/10 p-3 text-sm text-espresso">
             {L(
-              'مبيتمسحش: العملاء، الخدمات، الحلاقين، الإعدادات، التقييمات، المنتجات، المصروفات والخزاين.',
+              'مبيتمسحش أبداً: العملاء، الخدمات، الحلاقين، الإعدادات، المنتجات، المخزون، الأجهزة والصيانة.',
               'Not touched: customers, services, barbers, settings, reviews, products, expenses and boxes.',
             )}
           </div>
@@ -107,6 +127,19 @@ export function CleanupPage() {
             />
             <p className="mt-1 text-xs text-ink-70">{L('الافتراضي: النهاردة (يعني كل اللي فات).', 'Default: today (everything in the past).')}</p>
           </div>
+
+          {sel === 'all' ? (
+            <div className="space-y-2 rounded-btn border border-default p-3">
+              <p className="text-sm font-medium text-espresso">{L('امسح كمان من نفس الفترة:', 'Also delete from the same period:')}</p>
+              {EXTRA_SCOPES.map(([k, ar, en]) => (
+                <label key={k} className="flex cursor-pointer items-start gap-2.5 text-sm">
+                  <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-gold" checked={scopes.has(k)} onChange={() => toggleScope(k)} />
+                  <span>{isAr ? ar : en}</span>
+                </label>
+              ))}
+              <p className="text-xs text-ink-70">{L('لازم تختار "كل الحلاقين" عشان تظهر الاختيارات دي. العملاء والخدمات والإعدادات والمخزون والأجهزة بيفضلوا زي ما هم.', 'Choose "All barbers" to see these. Customers, services, settings, stock and equipment are kept.')}</p>
+            </div>
+          ) : null}
 
           <Button variant="secondary" loading={check.isPending} disabled={!before} onClick={() => check.mutate()}>
             {L('شوف هيتمسح كام', 'Preview what will be deleted')}
@@ -139,7 +172,7 @@ export function CleanupPage() {
                   <span className="font-latin">{formatCairoDateShort(preview.last)}</span>
                 </p>
               ) : null}
-              <Button variant="danger" disabled={preview.bookings === 0} onClick={() => setConfirmOpen(true)}>
+              <Button variant="danger" disabled={preview.bookings === 0 && !useExtras} onClick={() => setConfirmOpen(true)}>
                 {L('امسح', 'Delete')}
               </Button>
             </div>
@@ -153,11 +186,13 @@ export function CleanupPage() {
           <div className="relative w-full max-w-md space-y-3 rounded-card bg-white p-4 shadow-warm-lg">
             <h3 className="text-lg font-semibold text-danger">{L('تحذير: مسح نهائي', 'Warning: permanent delete')}</h3>
             <p className="text-sm text-ink-70">
+              {useExtras ? L(`وكمان: ${EXTRA_SCOPES.filter(([k]) => scopes.has(k)).map(([, ar]) => ar.split(' (')[0]).join('، ')}. `, `Also: ${EXTRA_SCOPES.filter(([k]) => scopes.has(k)).map(([, , en]) => en.split(' (')[0]).join(', ')}. `) : ''}
               {L(
                 `هتمسح ${preview.bookings} حجز ودفعاتهم (${whoName}) قبل ${before}. الإيراد والتقارير بتاعة الفترة دي هتتصفّر ومينفعش ترجّعها. يفضّل تعمل نسخة احتياطية الأول.`,
                 `This deletes ${preview.bookings} bookings and their payments (${whoName}) before ${before}. Income and reports for that period will be reset and cannot be restored. A backup first is recommended.`,
               )}
             </p>
+            <Link to="/more/backup" className="inline-flex min-h-9 items-center rounded-btn bg-gold/20 px-3 text-sm font-semibold text-espresso">{L('حمّل نسخة احتياطية الأول', 'Download a backup first')}</Link>
             <Input
               dir="auto"
               label={L(`اكتب كلمة "${WORD}" للتأكيد`, `Type "${WORD}" to confirm`)}

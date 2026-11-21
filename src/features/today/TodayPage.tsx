@@ -834,8 +834,8 @@ export function TodayPage() {
                       {/* Strong Day Header (Sticky to Top) */}
                       <div
                         className={cn(
-                          'sticky top-0 z-10 flex h-16 flex-col items-center justify-center border-b border-bark/15 px-1 py-1.5 transition-colors',
-                          isTodayDay ? 'bg-gold/15' : 'bg-white',
+                          'sticky top-0 z-[25] flex h-16 flex-col items-center justify-center border-b border-bark/15 px-1 py-1.5 transition-colors',
+                          isTodayDay ? 'bg-sand' : 'bg-white',
                         )}
                       >
                         {columnsActive && staff ? (
@@ -934,7 +934,7 @@ export function TodayPage() {
                         ) : null}
 
                         {/* Recurring Breaks */}
-                        {dayBreaks.map((br) => {
+                        {dayBreaks.filter((br, i, arr) => arr.findIndex((x) => x.start_time === br.start_time && x.end_time === br.end_time && (x.reason ?? '') === (br.reason ?? '')) === i).map((br) => {
                           const sMin = timeToMinutes(br.start_time);
                           const eMin = timeToMinutes(br.end_time);
                           const topPx = Math.max(0, ((sMin - gridStartMinutes) / 60) * hourH);

@@ -10,6 +10,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
 import { lastBackupAgeDays } from '@/features/backup/backupLib';
+import { CleaningChecklist } from './CleaningChecklist';
 
 type Cleanup = { count?: number; freed_bytes?: number } | null;
 const mb = (b?: number) => `${((b ?? 0) / 1048576).toFixed(1)} MB`;
@@ -79,6 +80,8 @@ export function MaintenancePage() {
         {stat(L('حجوزات الشهر', 'Bookings this month'), stats.data?.month)}
         {stat(L('كل الحجوزات', 'All bookings'), stats.data?.all)}
       </div>
+
+      <CleaningChecklist />
 
       <Card>
         <CardHeader>
