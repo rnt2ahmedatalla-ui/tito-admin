@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mapError } from '@/lib/errors';
 import { PushReminderCard } from './PushReminderCard';
+import { AdminPushCard } from './AdminPushCard';
 import { CalendarClock, CreditCard, Store, Smartphone, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -345,6 +346,7 @@ export function SettingsPage() {
 
       {tab === 'messages' ? (
         <>
+          <AdminPushCard />
           <PushReminderCard />
           <Card>
             <CardHeader>

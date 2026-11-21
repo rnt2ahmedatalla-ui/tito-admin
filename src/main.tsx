@@ -11,6 +11,9 @@ import '@fontsource/sora/700.css';
 import '@/lib/i18n';
 import './index.css';
 import { AppProviders } from './app/providers';
+import { registerAdminSw } from '@/lib/push';
+
+registerAdminSw();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
