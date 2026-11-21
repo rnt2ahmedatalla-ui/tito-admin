@@ -36,7 +36,7 @@ export function CustomerFlags({ userId }: { userId: string }) {
     <div className="flex flex-wrap gap-2">
       {d.noShow > 0 ? (
         <span className="inline-flex items-center gap-1 rounded-pill bg-danger/15 px-2.5 py-1 text-xs font-semibold text-danger">
-          ⚠ {isAr ? `غاب ${d.noShow} مرة قبل كده` : `No-show ${d.noShow}x before`}
+          ⚠ {isAr ? `غاب ${d.noShow} مرة (${Math.round((d.noShow / (d.noShow + d.completed)) * 100)}%)` : `No-show ${d.noShow}x (${Math.round((d.noShow / (d.noShow + d.completed)) * 100)}%)`}
         </span>
       ) : null}
       {d.completed >= 10 ? (

@@ -13,9 +13,9 @@ import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
 
 const DEFAULTS = {
-  title_ar: 'تذكير بمعادك ✂️',
+  title_ar: 'تذكير بمعادك',
   body_ar: 'معادك الساعة {time} في {shop} ({service}). مستنينك!',
-  title_en: 'Appointment reminder ✂️',
+  title_en: 'Appointment reminder',
   body_en: 'Your appointment is at {time} at {shop} ({service}). See you!',
 };
 type Key = keyof typeof DEFAULTS;
@@ -96,7 +96,7 @@ export function PushReminderCard() {
               <Input type="number" min={0.1} step="0.5" aria-label={L('ساعات مخصصة', 'Custom hours')} value={String(hours)} onChange={(e) => setHours(e.target.value as unknown as number)} />
             </div>
           </div>
-          <p className="mt-1.5 text-xs text-ink-70">{L('نفس الوقت بيتحكم في شريط تذكير الواتساب كمان.', 'This also controls the WhatsApp reminder bar.')}</p>
+          <p className="mt-1.5 text-xs text-ink-70">{L('ملحوظة: في صفحة اليوم بيظهر شريط فيه الحجوزات القريبة عشان تبعتلهم تذكير واتساب بإيدك بضغطة. الشريط ده بيظهر قبل المعاد بنفس عدد الساعات اللي اخترتها هنا، فمش محتاج تضبط حاجة تانية.', 'Note: the Today page shows a bar with upcoming bookings so you can send a WhatsApp reminder in one tap. It appears the same number of hours before the appointment as chosen here, so nothing else to set.')}</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -125,7 +125,7 @@ export function PushReminderCard() {
         <div className="rounded-card border border-default bg-sand/40 p-3">
           <p className="mb-1.5 text-xs text-ink-70">{L('شكلها عند العميل', 'Preview')}</p>
           <div className="flex items-start gap-3 rounded-btn bg-white p-3 shadow-sm">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-btn bg-espresso text-gold">✂</span>
+            <img src={`${import.meta.env.BASE_URL}tito-icon-192.png`} alt="" className="size-10 shrink-0 rounded-btn object-cover" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-espresso">{preview(pt)}</p>
               <p className="text-sm text-ink-70">{preview(pb)}</p>

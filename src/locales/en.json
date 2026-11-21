@@ -69,7 +69,8 @@
     "audit": "Activity log",
     "cleanup": "Data cleanup",
     "emergency": "Emergency",
-    "seasons": "Seasons & holidays"
+    "seasons": "Seasons & holidays",
+    "campaigns": "Campaigns & offers"
   },
   "status": {
     "pending_payment": "Pending payment",

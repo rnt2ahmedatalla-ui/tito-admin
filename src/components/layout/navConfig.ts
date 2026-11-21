@@ -22,6 +22,7 @@ import {
   Eraser,
   TriangleAlert,
   CalendarHeart,
+  Megaphone,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -46,6 +47,7 @@ export const navGroups: NavGroup[] = [
       { to: '/bookings', icon: List, labelKey: 'nav.bookings' },
       { to: '/more/customers', icon: Users, labelKey: 'nav.customers' },
       { to: '/more/reviews', icon: Star, labelKey: 'nav.reviews' },
+      { to: '/more/campaigns', icon: Megaphone, labelKey: 'nav.campaigns' },
       { to: '/more/loyalty', icon: Gift, labelKey: 'nav.loyalty' },
       { to: '/more/coupons', icon: Ticket, labelKey: 'nav.coupons' },
       { to: '/more/extras', icon: Boxes, labelKey: 'nav.extras' },

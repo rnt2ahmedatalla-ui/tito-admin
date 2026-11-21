@@ -62,7 +62,7 @@ function CustomerCard({
           ) : null}
           {customer.no_show_count >= 2 ? (
             <span className="mt-2 ms-1 inline-flex rounded-pill bg-warning/15 px-2 py-0.5 text-xs font-medium text-espresso">
-              ⚠ {customer.no_show_count}
+              ⚠ {customer.no_show_count} · {Math.round((customer.no_show_count / Math.max(1, customer.no_show_count + customer.completed_count)) * 100)}%
             </span>
           ) : null}
         </div>
