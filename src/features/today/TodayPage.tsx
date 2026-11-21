@@ -1,3 +1,4 @@
+import { ReminderChip } from '@/features/reminders/dueReminders';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -1020,6 +1021,7 @@ export function TodayPage() {
                                   {heightPx < 46 ? (
                                     <span dir="ltr" className="shrink-0 font-latin text-[11px] font-semibold opacity-80">{formatCairoTime(b.start_at, locale)}</span>
                                   ) : null}
+                                  <ReminderChip booking={b} />
                                   {isOnlineBooking(b) ? (
                                     <Globe className="size-3.5 shrink-0 opacity-70" aria-label={locale === 'ar' ? 'أونلاين' : 'Online'} />
                                   ) : isShopBooking(b) ? (

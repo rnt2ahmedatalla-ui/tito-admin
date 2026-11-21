@@ -399,8 +399,9 @@ const SOCIAL_FIELDS: Array<{ key: string; label: string; placeholder: string }> 
 
 function errMsg(e: unknown): string {
   const m = (e as { message?: string } | null)?.message ?? '';
-  if (/OWNER_ONLY/.test(m)) return 'مينفعش توقف نفسك وانت الحلاق الوحيد الشغال. لو عندك ظرف استخدم "ظرف طارئ" من المزيد.';
-  if (/OWNER_PROTECTED/.test(m)) return 'صاحب المحل ما ينفعش يتمسح. لو عايز توقف نفسك شغّل ملف features-v38.sql الأول.';
+  const ar = typeof document === 'undefined' || document.documentElement.lang !== 'en';
+  if (/OWNER_ONLY/.test(m)) return ar ? 'مينفعش توقف نفسك وانت الحلاق الوحيد الشغال. لو عندك ظرف استخدم "ظرف طارئ" من المزيد.' : 'You cannot pause yourself while you are the only active barber. For an emergency use "Emergency" under More.';
+  if (/OWNER_PROTECTED/.test(m)) return ar ? 'صاحب المحل ما ينفعش يتمسح. لو عايز توقف نفسك شغّل ملف features-v38.sql الأول.' : 'The owner cannot be deleted. To pause yourself, run features-v38.sql first.';
   return m;
 }
 

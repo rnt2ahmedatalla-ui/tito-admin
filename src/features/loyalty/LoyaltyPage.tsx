@@ -24,7 +24,9 @@ const rpc = supabase.rpc.bind(supabase) as unknown as (
 ) => Promise<{ data: unknown; error: { message: string } | null }>;
 
 export function LoyaltyPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isAr = !!i18n.language?.startsWith('ar');
+  const L = (ar: string, en: string) => (isAr ? ar : en);
   const qc = useQueryClient();
 
   const settingsQ = useQuery({
@@ -74,10 +76,10 @@ export function LoyaltyPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('اتحفظت إعدادات النقاط');
+      toast.success(L('اتحفظت إعدادات النقاط', 'Points settings saved'));
       void qc.invalidateQueries({ queryKey: ['loyalty-settings-admin'] });
     },
-    onError: (e) => toast.error((e as Error).message === 'BAD' ? 'راجع الأرقام (النسبة من 1 لـ 100، والقيم أكبر من صفر)' : mapError(e, t)),
+    onError: (e) => toast.error((e as Error).message === 'BAD' ? L('راجع الأرقام (النسبة من 1 لـ 100، والقيم أكبر من صفر)', 'Check the numbers (percent 1–100, values above zero)') : mapError(e, t)),
   });
 
   const balancesQ = useQuery({
@@ -101,19 +103,19 @@ export function LoyaltyPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('اتعدّل الرصيد');
+      toast.success(L('اتعدّل الرصيد', 'Balance updated'));
       setAdjPts('');
       setAdjNote('');
       void qc.invalidateQueries({ queryKey: ['loyalty-balances'] });
     },
-    onError: (e) => toast.error((e as Error).message === 'BAD' ? 'اختار العميل واكتب عدد النقاط' : mapError(e, t)),
+    onError: (e) => toast.error((e as Error).message === 'BAD' ? L('اختار العميل واكتب عدد النقاط', 'Pick a customer and enter the points') : mapError(e, t)),
   });
 
   if (settingsQ.isError) {
     return (
       <div className="space-y-3">
-        <h1 className="text-xl font-bold text-espresso">نقاط الولاء</h1>
-        <p className="rounded-btn bg-sand/50 p-3 text-sm">محتاج تشغّل ملف loyalty.sql في Supabase الأول.</p>
+        <h1 className="text-xl font-bold text-espresso">{L('نقاط الولاء', 'Loyalty points')}</h1>
+        <p className="rounded-btn bg-sand/50 p-3 text-sm">{L('محتاج تشغّل ملف loyalty.sql في Supabase الأول.', 'Run loyalty.sql in Supabase first.')}</p>
       </div>
     );
   }
@@ -123,35 +125,35 @@ export function LoyaltyPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-espresso">نقاط الولاء</h1>
+      <h1 className="text-xl font-bold text-espresso">{L('نقاط الولاء', 'Loyalty points')}</h1>
 
       <Card>
         <CardBody className="space-y-3 p-4">
           <label className="flex items-center justify-between gap-3">
-            <span className="font-semibold text-espresso">تشغيل النقاط</span>
+            <span className="font-semibold text-espresso">{L('تشغيل النقاط', 'Enable points')}</span>
             <input type="checkbox" className="size-5 accent-[#c9953f]" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           </label>
-          <Input label="كام نقطة على كل 100 جنيه (بعد اكتمال الحجز)" inputMode="decimal" value={per100} onChange={(e) => setPer100(e.target.value)} />
-          <Input label="قيمة النقطة الواحدة بالجنيه (وقت الاستبدال)" inputMode="decimal" value={egpPer} onChange={(e) => setEgpPer(e.target.value)} />
-          <Input label="أقل عدد نقاط للاستبدال" inputMode="numeric" value={minPts} onChange={(e) => setMinPts(e.target.value)} />
-          <Input label="أقصى نسبة من سعر الحجز تتغطى بالنقاط (%)" inputMode="numeric" value={maxPct} onChange={(e) => setMaxPct(e.target.value)} />
+          <Input label={L('كام نقطة على كل 100 جنيه (بعد اكتمال الحجز)', 'Points per 100 EGP (after completion)')} inputMode="decimal" value={per100} onChange={(e) => setPer100(e.target.value)} />
+          <Input label={L('قيمة النقطة الواحدة بالجنيه (وقت الاستبدال)', 'Value of one point in EGP (on redeem)')} inputMode="decimal" value={egpPer} onChange={(e) => setEgpPer(e.target.value)} />
+          <Input label={L('أقل عدد نقاط للاستبدال', 'Minimum points to redeem')} inputMode="numeric" value={minPts} onChange={(e) => setMinPts(e.target.value)} />
+          <Input label={L('أقصى نسبة من سعر الحجز تتغطى بالنقاط (%)', 'Max % of the price payable with points')} inputMode="numeric" value={maxPct} onChange={(e) => setMaxPct(e.target.value)} />
           <p className="text-xs text-ink-70">
-            مثال: حجز بـ 200 جنيه بيدّي العميل {ex} نقطة. النقاط بتتحسب على السعر النهائي بعد الخصم، ومبتتحسبش على حجوزات العملاء بدون حساب.
+            {L(`مثال: حجز بـ 200 جنيه بيدّي العميل ${ex} نقطة. النقاط بتتحسب على السعر النهائي بعد الخصم، ومبتتحسبش على حجوزات العملاء بدون حساب.`, `Example: a 200 EGP booking gives the customer ${ex} points. Points are based on the final price after discount and are not earned on bookings of customers without an account.`)}
           </p>
-          <Button className="w-full" loading={save.isPending} onClick={() => save.mutate()}>حفظ</Button>
+          <Button className="w-full" loading={save.isPending} onClick={() => save.mutate()}>{L('حفظ', 'Save')}</Button>
         </CardBody>
       </Card>
 
       <Card>
         <CardBody className="space-y-3 p-4">
-          <p className="font-semibold text-espresso">أرصدة العملاء</p>
+          <p className="font-semibold text-espresso">{L('أرصدة العملاء', 'Customer balances')}</p>
           {balances.length === 0 ? (
-            <p className="text-sm text-ink-70">لسه مفيش نقاط متسجلة.</p>
+            <p className="text-sm text-ink-70">{L('لسه مفيش نقاط متسجلة.', 'No points recorded yet.')}</p>
           ) : (
             <ul className="divide-y divide-bark/10 text-sm">
               {balances.map((b) => (
                 <li key={b.user_id} className="flex items-center justify-between gap-2 py-2">
-                  <span className="min-w-0 truncate">{b.full_name || 'عميل'} <span className="font-latin text-xs text-ink-70">{b.phone ?? ''}</span></span>
+                  <span className="min-w-0 truncate">{b.full_name || L('عميل', 'Customer')} <span className="font-latin text-xs text-ink-70">{b.phone ?? ''}</span></span>
                   <span className="font-latin font-bold">{b.points}</span>
                 </li>
               ))}
@@ -162,21 +164,21 @@ export function LoyaltyPage() {
 
       <Card>
         <CardBody className="space-y-3 p-4">
-          <p className="font-semibold text-espresso">تعديل رصيد يدوي (هدية أو تصحيح)</p>
+          <p className="font-semibold text-espresso">{L('تعديل رصيد يدوي (هدية أو تصحيح)', 'Manual balance adjustment (gift or fix)')}</p>
           <select
             value={adjUser}
             onChange={(e) => setAdjUser(e.target.value)}
             className="min-h-11 w-full rounded-btn border border-bark/20 bg-white px-3 text-sm"
           >
-            <option value="">— اختار العميل —</option>
+            <option value="">{L('— اختار العميل —', '— Pick a customer —')}</option>
             {balances.map((b) => (
-              <option key={b.user_id} value={b.user_id}>{b.full_name || 'عميل'} ({b.points})</option>
+              <option key={b.user_id} value={b.user_id}>{b.full_name || L('عميل', 'Customer')} ({b.points})</option>
             ))}
           </select>
-          <Input label="عدد النقاط (سالب لو عايز تخصم)" inputMode="numeric" value={adjPts} onChange={(e) => setAdjPts(e.target.value)} />
-          <Input label="ملاحظة (اختياري)" value={adjNote} onChange={(e) => setAdjNote(e.target.value)} />
-          <Button className="w-full" variant="secondary" loading={adjust.isPending} onClick={() => adjust.mutate()}>تعديل</Button>
-          <p className="text-xs text-ink-70">القايمة بتظهر العملاء اللي عندهم حركة نقاط بس. أي عميل جديد هيظهر بعد أول حجز مكتمل.</p>
+          <Input label={L('عدد النقاط (سالب لو عايز تخصم)', 'Points (negative to deduct)')} inputMode="numeric" value={adjPts} onChange={(e) => setAdjPts(e.target.value)} />
+          <Input label={L('ملاحظة (اختياري)', 'Note (optional)')} value={adjNote} onChange={(e) => setAdjNote(e.target.value)} />
+          <Button className="w-full" variant="secondary" loading={adjust.isPending} onClick={() => adjust.mutate()}>{L('تعديل', 'Adjust')}</Button>
+          <p className="text-xs text-ink-70">{L('القايمة بتظهر العملاء اللي عندهم حركة نقاط بس. أي عميل جديد هيظهر بعد أول حجز مكتمل.', 'Only customers with points activity are listed. New customers appear after their first completed booking.')}</p>
         </CardBody>
       </Card>
     </div>

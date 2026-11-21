@@ -15,6 +15,7 @@ import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import { navGroups } from '@/components/layout/navConfig';
 import { CountBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
+import { DueRemindersBar } from '@/features/reminders/dueReminders';
 import { useWaitlistCount } from '@/features/extras/useWaitlistCount';
 import { usePaymentsCount } from '@/hooks/usePaymentsCount';
 import { setLanguage } from '@/lib/i18n';
@@ -165,6 +166,7 @@ export function AppShell() {
         </header>
 
         <main className="mx-auto w-full min-w-0 max-w-content flex-1 p-4 pb-24 lg:p-6 lg:pb-6">
+          <DueRemindersBar />
           <Outlet />
         </main>
 

@@ -398,7 +398,7 @@ export function PaymentsPage({ embedded = false }: { embedded?: boolean } = {}) 
               onChange={(e) => setRejectReason(e.target.value)}
             />
             <div className="mt-2 flex flex-wrap gap-2">
-              {['مبلغ غلط', 'صورة مش واضحة على واتساب', 'تحويل مكرر', 'مفيش صورة'].map((r) => (
+              {(i18n.language?.startsWith('ar') ? ['مبلغ غلط', 'صورة مش واضحة على واتساب', 'تحويل مكرر', 'مفيش صورة'] : ['Wrong amount', 'Unclear screenshot on WhatsApp', 'Duplicate transfer', 'No screenshot']).map((r) => (
                 <Button key={r} variant="ghost" size="sm" onClick={() => setRejectReason(r)}>
                   {r}
                 </Button>
