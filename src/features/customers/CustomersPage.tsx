@@ -18,21 +18,25 @@ import { mapError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
 import { CustomerFile } from './CustomerFile';
 import { rpcUntyped } from '@/features/staff/staffLogin';
+import { untypedDb } from '@/features/payments/useFinanceBoxes';
 
 const PAGE_SIZE = 25;
 
 function CustomerCard({
   customer,
+  spent,
   onBlock,
   onDelete,
   onOpen,
 }: {
   customer: CustomerSearchResult;
+  spent?: number;
   onBlock: () => void;
   onDelete: () => void;
   onOpen: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isAr = !!i18n.language?.startsWith('ar');
 
   return (
     <div
@@ -54,6 +58,10 @@ function CustomerCard({
           </p>
           <p className="mt-1 font-latin text-sm text-ink-70" dir="ltr">
             {customer.phone || '—'}
+          </p>
+          <p className="mt-1.5 text-xs text-ink-70">
+            {isAr ? `${customer.completed_count} زيارة · ${customer.total_bookings} حجز` : `${customer.completed_count} visits · ${customer.total_bookings} bookings`}
+            {spent !== undefined ? (isAr ? ` · دفع ${formatEGP(spent)}` : ` · paid ${formatEGP(spent)}`) : ''}
           </p>
           {customer.is_blocked ? (
             <span className="mt-2 inline-flex rounded-pill bg-danger/15 px-2 py-0.5 text-xs font-medium text-danger">
@@ -316,6 +324,8 @@ export function CustomersPage() {
   const [deleteWithBookings, setDeleteWithBookings] = useState<number | null>(null);
   const [openCustomer, setOpenCustomer] = useState<CustomerSearchResult | null>(null);
   const autoOpenedRef = useRef(false);
+  type SortKey = 'recent' | 'visits' | 'spent' | 'bookings' | 'noshow';
+  const [sort, setSort] = useState<SortKey>('recent');
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -348,7 +358,53 @@ export function CustomersPage() {
     staleTime: 15_000,
   });
 
-  const customers = useMemo(() => data?.pages.flat() ?? [], [data]);
+  const sorted = sort !== 'recent';
+  const allQ = useQuery({
+    queryKey: ['customers-all'],
+    enabled: sorted,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const all: CustomerSearchResult[] = [];
+      for (let page = 0; page < 10; page++) {
+        const { data: rows, error: e } = await supabase.rpc('admin_search_customers', { p_q: '', p_limit: 500, p_offset: page * 500 });
+        if (e) throw e;
+        const r = (rows ?? []) as CustomerSearchResult[];
+        all.push(...r);
+        if (r.length < 500) break;
+      }
+      return all;
+    },
+  });
+  const spendQ = useQuery({
+    queryKey: ['customers-spend'],
+    enabled: sort === 'spent',
+    staleTime: 60_000,
+    queryFn: async () => {
+      const m = new Map<string, number>();
+      for (let from = 0; from < 20000; from += 1000) {
+        const { data: rows, error: e } = await untypedDb.from('bookings').select('user_id, price_egp').eq('status', 'completed').range(from, from + 999);
+        if (e) throw e;
+        const r = (rows ?? []) as Array<{ user_id: string | null; price_egp: number | null }>;
+        r.forEach((x) => x.user_id && m.set(x.user_id, (m.get(x.user_id) ?? 0) + Number(x.price_egp ?? 0)));
+        if (r.length < 1000) break;
+      }
+      return m;
+    },
+  });
+  const spend = spendQ.data;
+  const customers = useMemo(() => {
+    if (!sorted) return data?.pages.flat() ?? [];
+    const q = debouncedSearch.toLowerCase();
+    const base = (allQ.data ?? []).filter((c) => !q || (c.full_name ?? '').toLowerCase().includes(q) || (c.phone ?? '').includes(q));
+    const key: Record<string, (c: CustomerSearchResult) => number> = {
+      visits: (c) => c.completed_count,
+      bookings: (c) => c.total_bookings,
+      noshow: (c) => c.no_show_count,
+      spent: (c) => spend?.get(c.id) ?? 0,
+    };
+    return [...base].sort((a, b) => key[sort](b) - key[sort](a));
+  }, [data, sorted, allQ.data, debouncedSearch, sort, spend]);
+  const listLoading = sorted ? allQ.isLoading || (sort === 'spent' && spendQ.isLoading) : isLoading;
 
   // لو جيت من التقارير (ومعاك ?q=)، التفاصيل بتتفتح على طول
   useEffect(() => {
@@ -410,7 +466,22 @@ export function CustomersPage() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      {isLoading ? (
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {([
+          ['recent', LL('الأحدث', 'Default')],
+          ['visits', LL('أكثر زيارات', 'Most visits')],
+          ['spent', LL('أكثر دفع', 'Most paid')],
+          ['bookings', LL('أكثر حجز', 'Most bookings')],
+          ['noshow', LL('أكثر ما حضرش', 'Most no-shows')],
+        ] as Array<[SortKey, string]>).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setSort(id)}
+            className={cn('min-h-9 shrink-0 rounded-full border px-3 text-sm font-medium transition-colors', sort === id ? 'border-gold bg-gold text-espresso' : 'border-default bg-white text-ink-70 hover:bg-sand')}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {listLoading ? (
         <Skeleton className="h-64" />
       ) : isError ? (
         <div className="space-y-3 py-12 text-center">
@@ -431,6 +502,7 @@ export function CustomersPage() {
               <CustomerCard
                 key={c.id}
                 customer={c}
+                spent={sort === 'spent' ? spend?.get(c.id) ?? 0 : undefined}
                 onBlock={() => setBlockTarget(c)}
                 onDelete={() => setDeleteTarget(c)}
                 onOpen={() => setOpenCustomer(c)}
@@ -502,7 +574,7 @@ export function CustomersPage() {
         </>
       )}
 
-      {hasNextPage ? (
+      {!sorted && hasNextPage ? (
         <Button
           variant="secondary"
           loading={isFetchingNextPage}

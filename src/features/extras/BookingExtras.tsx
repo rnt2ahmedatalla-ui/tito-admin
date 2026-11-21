@@ -1,13 +1,13 @@
 import { waLink } from '@/features/staff/staffLogin';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { MessageCircle, Star } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 
 const CUSTOMER_BASE_URL = (import.meta.env.VITE_CUSTOMER_URL || 'https://tito-customer.vercel.app').replace(/\/+$/, '');
 
-/** علامات سريعة عن العميل: غاب قبل كده؟ عميل مميز؟ */
+/** علامة سريعة: العميل غاب قبل كده؟ */
 export function CustomerFlags({ userId }: { userId: string }) {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
@@ -31,18 +31,12 @@ export function CustomerFlags({ userId }: { userId: string }) {
     },
   });
   const d = q.data;
-  if (!d || (d.noShow === 0 && d.completed < 10)) return null;
+  if (!d || d.noShow === 0) return null;
   return (
     <div className="flex flex-wrap gap-2">
       {d.noShow > 0 ? (
         <span className="inline-flex items-center gap-1 rounded-pill bg-danger/15 px-2.5 py-1 text-xs font-semibold text-danger">
           ⚠ {isAr ? `غاب ${d.noShow} مرة (${Math.round((d.noShow / (d.noShow + d.completed)) * 100)}%)` : `No-show ${d.noShow}x (${Math.round((d.noShow / (d.noShow + d.completed)) * 100)}%)`}
-        </span>
-      ) : null}
-      {d.completed >= 10 ? (
-        <span className="inline-flex items-center gap-1 rounded-pill bg-gold/20 px-2.5 py-1 text-xs font-semibold text-espresso">
-          <Star className="size-3.5 fill-gold text-gold" />
-          {isAr ? `عميل مميز (${d.completed} حلاقة)` : `VIP (${d.completed} visits)`}
         </span>
       ) : null}
     </div>

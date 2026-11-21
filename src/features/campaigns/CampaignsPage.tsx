@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 
 const CUSTOMER_URL = (import.meta.env.VITE_CUSTOMER_URL || 'https://tito-customer.vercel.app').replace(/\/+$/, '');
 
-type Audience = 'all' | 'recent' | 'lapsed' | 'vip';
+type Audience = 'all' | 'recent' | 'lapsed' | 'frequent';
 type Preset = { id: string; ar: string; en: string; label: [string, string] };
 
 const PRESETS: Preset[] = [
@@ -79,7 +79,7 @@ export function CampaignsPage() {
       const last = c.last_visit ? Date.parse(c.last_visit) : null;
       if (audience === 'recent') return last !== null && now - last <= 60 * day;
       if (audience === 'lapsed') return last === null ? c.completed_count > 0 : now - last >= 30 * day;
-      if (audience === 'vip') return c.completed_count >= 10;
+      if (audience === 'frequent') return c.completed_count >= 5;
       return true;
     });
   }, [customersQ.data, audience]);
@@ -133,7 +133,7 @@ export function CampaignsPage() {
     ['all', L('كل العملاء', 'All customers')],
     ['recent', L('زاروني آخر شهرين', 'Visited in last 60 days')],
     ['lapsed', L('غايبين +30 يوم', 'Away 30+ days')],
-    ['vip', L('عملاء مميزين (10+ زيارات)', 'VIP (10+ visits)')],
+    ['frequent', L('بيجوا كتير (5+ زيارات)', 'Frequent (5+ visits)')],
   ];
   const chip = (active: boolean) =>
     cn('min-h-9 rounded-full border px-3 text-sm font-medium transition-colors', active ? 'border-gold bg-gold text-espresso' : 'border-default bg-white text-ink-70 hover:bg-sand');

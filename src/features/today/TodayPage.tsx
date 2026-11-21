@@ -26,7 +26,6 @@ import {
 } from '@/lib/time';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/hooks/useAuth';
-import { TodayAlerts } from '@/features/extras/TodayAlerts';
 import { first, isOnlineBooking, isShopBooking } from '@/lib/booking';
 
 type ViewMode = 'day' | 'three' | 'week';
@@ -505,7 +504,6 @@ export function TodayPage() {
 
   return (
     <div className="space-y-4">
-      {readOnly ? null : <TodayAlerts />}
       {/* Setmore Header with Month/Year Title & Notifications Bell */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-default pb-3.5">
         <div className="flex flex-wrap items-center gap-2.5">

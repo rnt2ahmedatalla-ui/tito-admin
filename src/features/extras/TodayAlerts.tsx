@@ -1,30 +1,37 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { TriangleAlert, ChevronDown, ChevronUp } from 'lucide-react';
-import { untypedDb } from '@/features/payments/useFinanceBoxes';
+import { useTranslation } from 'react-i18next';
 import { useFinData } from '@/features/finance/useFinance';
-import { cairoDayBounds, cairoDateString } from '@/lib/time';
-import { cn } from '@/lib/cn';
+import { useAuth } from '@/hooks/useAuth';
+import { cairoDateString } from '@/lib/time';
+import { untypedDb } from '@/features/payments/useFinanceBoxes';
 import { useWaitlistCount } from './useWaitlistCount';
 import { lastBackupAgeDays } from '@/features/backup/backupLib';
 
-type Alert = { key: string; text: string; to: string; tone: 'warn' | 'info' };
+export type Alert = { key: string; text: string; to: string; tone: 'warn' | 'info' };
 
-/** تنبيهات ذكية فوق التقويم: كل اللي محتاج انتباهك في مكان واحد (بتختفي لوحدها لما تتحل) */
-export function TodayAlerts() {
+const SEEN_KEY = 'tito.alerts.seen';
+export const readSeenAlerts = () => {
+  try {
+    return localStorage.getItem(SEEN_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+export const writeSeenAlerts = (sig: string) => {
+  try {
+    localStorage.setItem(SEEN_KEY, sig);
+  } catch {
+    /* ignore */
+  }
+};
+
+/** تنبيهات ذكية بتظهر جوه الجرس: كل اللي محتاج انتباهك في مكان واحد (بتختفي لوحدها لما تتحل) */
+export function useAlerts(): { alerts: Alert[]; sig: string } {
   const { i18n } = useTranslation();
   const isAr = i18n.language?.startsWith('ar');
   const L = (ar: string, en: string) => (isAr ? ar : en);
-  const [open, setOpen] = useState(false);
-  const [seen, setSeen] = useState<string>(() => {
-    try {
-      return localStorage.getItem('tito.alerts.seen') || '';
-    } catch {
-      return '';
-    }
-  });
+  const { role } = useAuth();
+  const isAdmin = role !== 'staff';
   const fin = useFinData();
   const waitN = useWaitlistCount().data ?? 0;
 
@@ -32,6 +39,7 @@ export function TodayAlerts() {
     queryKey: ['alerts-late-payments'],
     staleTime: 60_000,
     retry: false,
+    enabled: isAdmin,
     queryFn: async () => {
       const cutoff = new Date(Date.now() - 2 * 3600_000).toISOString();
       const { count, error } = await untypedDb
@@ -44,30 +52,9 @@ export function TodayAlerts() {
     },
   });
 
-  const vip = useQuery({
-    queryKey: ['alerts-vip', cairoDateString(new Date())],
-    staleTime: 5 * 60_000,
-    retry: false,
-    queryFn: async (): Promise<string[]> => {
-      const b = cairoDayBounds(new Date());
-      const today = await untypedDb
-        .from('bookings')
-        .select('user_id, start_at, profile:profiles!bookings_user_id_fkey(full_name)')
-        .in('status', ['confirmed', 'pending_payment'])
-        .gte('start_at', b.start)
-        .lte('start_at', b.end);
-      const rows = (today.data ?? []) as Array<{ user_id: string; profile: { full_name: string | null } | null }>;
-      const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
-      if (ids.length === 0) return [];
-      const done = await untypedDb.from('bookings').select('user_id').eq('status', 'completed').in('user_id', ids).limit(3000);
-      const count = new Map<string, number>();
-      ((done.data ?? []) as Array<{ user_id: string }>).forEach((r) => count.set(r.user_id, (count.get(r.user_id) ?? 0) + 1));
-      return rows.filter((r) => (count.get(r.user_id) ?? 0) >= 10).map((r) => r.profile?.full_name ?? '—');
-    },
-  });
-
   const alerts: Alert[] = [];
-  const iso = (x: string) => `\u2068${x}\u2069`;
+  if (!isAdmin) return { alerts, sig: '' };
+  const iso = (x: string) => `⁨${x}⁩`;
   const n = late.data ?? 0;
   if (waitN > 0) alerts.push({ key: 'wait', tone: 'warn', to: '/routine?t=waitlist', text: L(`${waitN} عميل مستني في قايمة الانتظار`, `${waitN} customer(s) on the waiting list`) });
   if (n > 0) alerts.push({ key: 'late', tone: 'warn', to: '/routine?t=payments', text: L(`${n} دفعة مستنية أكتر من ساعتين`, `${n} payment(s) waiting over 2 hours`) });
@@ -86,61 +73,11 @@ export function TodayAlerts() {
     }
   }
 
-  const v = vip.data ?? [];
-  if (v.length > 0) alerts.push({ key: 'vip', tone: 'info', to: '/bookings', text: L(`عميل مميز (10+ حلاقة) عنده معاد النهاردة: ${v.slice(0, 2).map(iso).join('، ')}`, `VIP (10+ visits) booked today: ${v.slice(0, 2).map(iso).join(', ')}`) });
-
   const age = lastBackupAgeDays();
   if (age === null || age >= 7) {
     alerts.push({ key: 'backup', tone: 'info', to: '/more/backup', text: age === null ? L('لسه معملتش نسخة احتياطية للبيانات', 'No data backup yet') : L(`آخر نسخة احتياطية من ${age} يوم`, `Last backup ${age} days ago`) });
   }
 
-  if (alerts.length === 0) return null;
   const sig = alerts.map((x) => x.key + (x.text.match(/\d+/)?.[0] ?? '')).join('|');
-  const isNew = sig !== seen;
-  const hasWarn = alerts.some((x) => x.tone === 'warn');
-  const expanded = open || isNew;
-  const toggle = () => {
-    if (expanded) {
-      try {
-        localStorage.setItem('tito.alerts.seen', sig);
-      } catch {
-        /* ignore */
-      }
-      setSeen(sig);
-      setOpen(false);
-    } else {
-      setOpen(true);
-    }
-  };
-  return (
-    <div className={cn('overflow-hidden rounded-btn border', hasWarn ? 'border-danger/40 bg-danger/5' : 'border-gold/40 bg-gold/10')}>
-      <button type="button" onClick={toggle} className="flex min-h-10 w-full items-center justify-between gap-2 px-3 py-1.5 text-start">
-        <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-espresso">
-          <span className="relative flex size-5 shrink-0 items-center justify-center">
-            {isNew ? <span className="absolute inline-flex size-full animate-ping rounded-full bg-danger/40" aria-hidden /> : null}
-            <TriangleAlert className={cn('relative size-4', hasWarn ? 'text-danger' : 'text-gold')} aria-hidden />
-          </span>
-          <span className="truncate">{L('تنبيهات', 'Alerts')} <span className="font-latin">({alerts.length})</span></span>
-          {isNew ? <span className="shrink-0 rounded-pill bg-danger px-2 py-0.5 text-[10px] font-bold text-white">{L('جديد', 'New')}</span> : null}
-        </span>
-        {expanded ? <ChevronUp className="size-4 shrink-0 text-ink-70" /> : <ChevronDown className="size-4 shrink-0 text-ink-70" />}
-      </button>
-      {expanded ? (
-        <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
-          {alerts.map((a) => (
-            <Link
-              key={a.key}
-              to={a.to}
-              className={cn(
-                'min-w-0 max-w-full rounded-pill border px-3 py-1 text-xs font-medium transition-colors',
-                a.tone === 'warn' ? 'border-danger/30 bg-white text-danger hover:bg-danger/10' : 'border-bark/20 bg-white text-espresso hover:bg-sand/50',
-              )}
-            >
-              <span className="block truncate">{a.text}</span>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+  return { alerts, sig };
 }

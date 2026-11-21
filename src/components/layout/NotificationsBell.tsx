@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, ChevronRight } from 'lucide-react';
+import { Bell, ChevronRight, TriangleAlert } from 'lucide-react';
+import { readSeenAlerts, useAlerts, writeSeenAlerts } from '@/features/extras/TodayAlerts';
 import {
   notificationHref,
   useAdminNotifications,
@@ -33,7 +34,10 @@ export function NotificationsBell() {
     (n) => (n.kind ?? '').startsWith('product') || n.entity === 'product_order',
   );
   const unreadProducts = productNotifs.filter((n) => !n.is_read).length;
-  const badge = pending.length + unreadProducts;
+  const { alerts, sig } = useAlerts();
+  const [seen, setSeen] = useState(readSeenAlerts);
+  const hasNewAlerts = alerts.length > 0 && sig !== seen;
+  const badge = pending.length + unreadProducts + alerts.length;
 
   const toggle = () => {
     if (!open && btnRef.current) {
@@ -45,6 +49,10 @@ export function NotificationsBell() {
         top: rect.bottom + 8,
         left: Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8)),
       });
+    }
+    if (!open && sig) {
+      writeSeenAlerts(sig);
+      setSeen(sig);
     }
     setOpen((v) => !v);
   };
@@ -87,9 +95,26 @@ export function NotificationsBell() {
           ) : null}
         </div>
         <ul className="max-h-[min(60dvh,24rem)] divide-y divide-bark/10 overflow-y-auto overscroll-contain">
-          {pending.length === 0 && productNotifs.length === 0 ? (
+          {alerts.map((a) => (
+            <li key={a.key}>
+              <button
+                type="button"
+                className={cn('flex w-full items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-sand/50', a.tone === 'warn' ? 'bg-danger/5' : '')}
+                onClick={() => {
+                  setOpen(false);
+                  navigate(a.to);
+                }}
+              >
+                <TriangleAlert className={cn('size-4 shrink-0', a.tone === 'warn' ? 'text-danger' : 'text-gold')} aria-hidden />
+                <span className="min-w-0 flex-1 text-sm font-medium text-espresso">{a.text}</span>
+                <ChevronRight className="size-4 shrink-0 text-ink-70 rtl:-scale-x-100" aria-hidden />
+              </button>
+            </li>
+          ))}
+
+          {pending.length === 0 && productNotifs.length === 0 && alerts.length === 0 ? (
             <li className="px-4 py-6 text-sm text-ink-70">
-              {L('مفيش طلبات دفع مستنية تأكيدك', 'No payment requests waiting for you')}
+              {L('مفيش حاجة محتاجة انتباهك ✅', 'Nothing needs your attention ✅')}
             </li>
           ) : null}
 
@@ -172,7 +197,8 @@ export function NotificationsBell() {
         aria-expanded={open}
         onClick={toggle}
       >
-        <Bell className="size-5 text-gold" />
+        {hasNewAlerts ? <span className="absolute inset-0 animate-ping rounded-btn bg-danger/30" aria-hidden /> : null}
+        <Bell className="relative size-5 text-gold" />
         {badge > 0 ? (
           <span className="absolute -end-1.5 -top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-gold px-1.5 text-[11px] font-bold text-espresso shadow">
             {badge > 9 ? '9+' : badge}
